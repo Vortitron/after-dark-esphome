@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>After Dark for ESPHome</title>
+  <meta name="description" content="Pick the After Dark screen savers for an ESP32 and its screen, see how much flash they take, and get the ESPHome config.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='3' fill='%2332373b'/%3E%3Crect x='9' y='9' width='14' height='14' fill='%23ff6a13'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%2332373b'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ------------------------------------------------------------------
+       A control cabinet: a grey backplate, the savers as I/O modules on
+       a DIN rail, an LED bar graph for the flash, and the config as the
+       program listing. A cabinet is the colour it is, light or dark room.
+       ------------------------------------------------------------------ */
+    :root {
+      --plate: #c9cdc8;         /* RAL 7035, the cabinet */
+      --plate-hi: #dfe2dd;
+      --plate-lo: #a9aea8;
+      --module: #ecedea;        /* module housings */
+      --module-edge: #b9bcb6;
+      --rail: #34393d;          /* DIN rail and dark parts */
+      --rail-hi: #4a5055;
+      --ink: #15181a;
+      --ink-2: #4b5257;
+      --label: #fbfbf7;         /* engraved label strips */
+      --orange: #ff6a13;        /* RAL 2004, the actions */
+      --orange-dk: #c44c06;
+      --green: #2fd16a;
+      --amber: #ffb000;
+      --red: #e3342b;
+      --led-off: #1e2325;
+      --screen: #0b0f0c;
+      --phosphor: #9dff9d;
+      --sans: "IBM Plex Sans Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, "Courier New", monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 1px 1px, rgba(0, 0, 0, .07) 1px, transparent 1.5px) 0 0 / 6px 6px,
+        var(--plate);
+      color: var(--ink);
+      font: 15px/1.45 var(--sans);
+    }
+    a { color: var(--ink); }
+    .cabinet { max-width: 1040px; margin: 0 auto; padding: 20px 16px 48px; display: grid; gap: 18px; }
+
+    /* --- nameplate ------------------------------------------------------- */
+    .nameplate {
+      position: relative;
+      background: var(--rail); color: #e8ebe6;
+      border-radius: 6px; padding: 18px 22px 16px;
+      display: grid; grid-template-columns: 1fr auto; gap: 8px 20px; align-items: end;
+      box-shadow: inset 0 1px 0 var(--rail-hi), 0 2px 0 rgba(0, 0, 0, .2);
+    }
+    .nameplate::before {
+      content: ""; position: absolute; left: 0; right: 0; top: 0; height: 6px; border-radius: 6px 6px 0 0;
+      background: repeating-linear-gradient(-45deg, var(--orange) 0 10px, var(--rail) 10px 20px);
+    }
+    .nameplate h1 { margin: 6px 0 0; font: 700 clamp(24px, 4.4vw, 36px)/1.05 var(--sans); letter-spacing: .04em; text-transform: uppercase; }
+    .nameplate h1 span { color: var(--orange); }
+    .nameplate p { margin: 4px 0 0; color: #b9c0bb; max-width: 62ch; }
+    .spec { font: 12px/1.6 var(--mono); color: #b9c0bb; text-align: right; white-space: nowrap; }
+    .spec b { color: #e8ebe6; font-weight: 600; }
+    .lamps { display: flex; gap: 14px; justify-content: flex-end; margin-top: 6px; }
+    .lamp { display: inline-flex; align-items: center; gap: 6px; font: 11px var(--mono); color: #b9c0bb; }
+    .lamp i { width: 10px; height: 10px; border-radius: 50%; background: var(--led-off); box-shadow: inset 0 0 0 1px #000; }
+    .lamp.run i { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .lamp.fault.on i { background: var(--red); box-shadow: 0 0 8px var(--red); animation: blink 1s steps(2, start) infinite; }
+    @keyframes blink { to { visibility: hidden; } }
+    @media (max-width: 640px) {
+      .nameplate { grid-template-columns: 1fr; }
+      .spec { text-align: left; }
+      .lamps { justify-content: flex-start; }
+    }
+
+    /* --- panels ------------------------------------------------------------ */
+    .panel {
+      background: var(--plate-hi);
+      border: 1px solid var(--plate-lo);
+      border-radius: 5px;
+      box-shadow: inset 0 1px 0 #fff, 0 1px 0 rgba(0, 0, 0, .12);
+      padding: 0 16px 16px;
+      min-width: 0;
+    }
+    .panel[hidden] { display: none; }
+    .panel > header {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin: 0 -16px 14px; padding: 9px 16px;
+      border-bottom: 1px solid var(--plate-lo);
+      background: linear-gradient(var(--plate-hi), #d6d9d4);
+      border-radius: 5px 5px 0 0;
+    }
+    .panel h2 { margin: 0; font: 700 14px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; }
+    .panel h2 .no { display: inline-block; min-width: 26px; padding: 2px 5px; margin-right: 8px; background: var(--rail); color: #fff; font: 600 11px/1.3 var(--mono); text-align: center; border-radius: 2px; letter-spacing: 0; }
+    .panel header .grow { flex: 1; }
+    .panel p { margin: 0 0 8px; max-width: 72ch; }
+    .hint { font-size: 13px; color: var(--ink-2); }
+
+    /* --- the CPU module (board and screen) ---------------------------------- */
+    .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .field { display: grid; gap: 4px; }
+    .field > span { font: 600 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+    select {
+      width: 100%; font: 15px var(--sans); color: var(--ink);
+      appearance: none; -webkit-appearance: none;
+      background:
+        linear-gradient(45deg, transparent 50%, var(--ink) 50%) right 15px center / 6px 6px no-repeat,
+        linear-gradient(-45deg, transparent 50%, var(--ink) 50%) right 9px center / 6px 6px no-repeat,
+        var(--label);
+      border: 1px solid var(--module-edge); border-bottom-width: 2px; border-radius: 3px;
+      padding: 8px 30px 8px 10px;
+    }
+    select:focus-visible, button:focus-visible, .sw input:focus-visible + i, a:focus-visible, textarea:focus-visible {
+      outline: 2px solid var(--orange); outline-offset: 2px;
+    }
+
+    /* --- the rail of I/O modules ------------------------------------------- */
+    .rail {
+      position: relative;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px;
+      padding: 12px; border-radius: 4px;
+      background: #bfc3bd;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, .25);
+    }
+    .mod {
+      position: relative; display: grid; grid-template-rows: auto auto 1fr auto auto; gap: 6px;
+      background: var(--module); border: 1px solid var(--module-edge); border-radius: 4px;
+      padding: 8px 8px 9px; min-height: 196px;
+      box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(0, 0, 0, .18);
+    }
+    /* The DIN rail showing either side of each module's foot. */
+    .mod::after { content: ""; position: absolute; left: -6px; right: -6px; top: 50%; height: 14px; margin-top: -7px; background: var(--rail); z-index: -1; }
+    .rail { isolation: isolate; }
+    /* Screw terminals along the top. */
+    .mod .terms { height: 9px; background: radial-gradient(circle, #8d938e 2.5px, #5f6661 3px, transparent 3.5px) 0 0 / 14px 9px repeat-x; opacity: .8; }
+    .mod .top { display: flex; align-items: center; justify-content: space-between; }
+    .mod .code { font: 600 10px var(--mono); color: var(--ink-2); letter-spacing: .06em; }
+    .led { width: 11px; height: 11px; border-radius: 50%; background: var(--led-off); box-shadow: inset 0 0 0 1px #000; }
+    .mod.on .led { background: var(--green); box-shadow: 0 0 7px var(--green), inset 0 0 0 1px #0a6b2e; }
+    .mod .plate { background: var(--label); border: 1px solid var(--module-edge); border-radius: 2px; padding: 5px 6px; cursor: pointer; min-width: 0; }
+    .mod .plate b { display: block; font: 700 14px/1.15 var(--sans); }
+    .mod .plate small { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; line-height: 1.3; color: var(--ink-2); margin-top: 3px; }
+    .readout {
+      font: 600 13px/1 var(--mono); text-align: right; font-variant-numeric: tabular-nums;
+      background: var(--screen); color: var(--phosphor); padding: 5px 6px; border-radius: 2px;
+      text-shadow: 0 0 4px rgba(157, 255, 157, .5);
+    }
+    .mod .ctl { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .mod.na { background: repeating-linear-gradient(-45deg, #e3e4e0 0 6px, #d8dad5 6px 12px); }
+    .mod.na .plate b, .mod.na .code { color: #8a908b; }
+    .mod.na .readout { color: #4a5a4a; text-shadow: none; }
+
+    /* A rocker switch over a real checkbox. */
+    .sw { position: relative; display: inline-block; width: 46px; height: 24px; flex: none; }
+    .sw input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+    .sw i {
+      position: absolute; inset: 0; border-radius: 3px; pointer-events: none;
+      background: var(--rail); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .6);
+    }
+    .sw i::before {
+      content: "0"; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 2px;
+      background: linear-gradient(#f1f2ef, #c3c7c1); color: var(--ink-2);
+      font: 600 11px/20px var(--mono); text-align: center; transition: transform .12s;
+    }
+    .sw input:checked + i::before { content: "I"; transform: translateX(22px); background: linear-gradient(#ff8d4d, var(--orange)); color: #fff; }
+    .sw input:disabled { cursor: not-allowed; }
+    .sw input:disabled + i { opacity: .35; }
+    @media (prefers-reduced-motion: reduce) { .sw i::before { transition: none; } }
+
+    .btn {
+      font: 700 12px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase;
+      color: var(--ink); background: linear-gradient(#f6f7f4, #d3d6d1);
+      border: 1px solid #8f958f; border-bottom-width: 3px; border-radius: 3px;
+      padding: 8px 12px 7px; cursor: pointer; text-decoration: none; display: inline-block; text-align: center;
+    }
+    .btn:active { border-bottom-width: 1px; transform: translateY(2px); }
+    .btn.go { background: linear-gradient(#ff8d4d, var(--orange)); border-color: var(--orange-dk); color: #fff; }
+    .btn.small { padding: 5px 8px 4px; font-size: 11px; }
+
+    .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+    .bar .grow { flex: 1; }
+    .bar label { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+    .bar select { width: auto; min-width: 170px; }
+
+    /* --- parameters --------------------------------------------------------- */
+    .params { display: grid; gap: 12px; }
+    .param { display: grid; grid-template-columns: 160px 1fr; gap: 6px 14px; align-items: start; padding-top: 10px; border-top: 1px dashed var(--plate-lo); }
+    .param[hidden] { display: none; }
+    .param:first-child { border-top: 0; padding-top: 0; }
+    .param h3 { margin: 2px 0 0; font: 700 14px var(--sans); }
+    .param h3 small { display: block; font: 11px var(--mono); color: var(--ink-2); margin-top: 2px; }
+    .choices { display: flex; flex-wrap: wrap; gap: 6px; }
+    .choice { position: relative; display: inline-flex; }
+    .choice input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+    .choice span {
+      display: inline-flex; gap: 6px; align-items: baseline; padding: 6px 9px 5px;
+      background: var(--label); border: 1px solid var(--module-edge); border-bottom-width: 2px; border-radius: 3px; font-size: 14px;
+    }
+    .choice span small { font: 11px var(--mono); color: var(--ink-2); }
+    .choice input:checked + span { background: var(--rail); color: #fff; border-color: #000; }
+    .choice input:checked + span small { color: #c9d0ca; }
+    .choice input:focus-visible + span { outline: 2px solid var(--orange); outline-offset: 2px; }
+    @media (max-width: 560px) { .param { grid-template-columns: 1fr; } }
+
+    /* --- flash bar graph ---------------------------------------------------- */
+    .graph { display: grid; grid-template-columns: repeat(40, 1fr); gap: 3px; padding: 8px; background: var(--screen); border-radius: 3px; }
+    .graph i { height: 22px; border-radius: 1px; background: #1c241e; }
+    .graph i.g { background: var(--green); box-shadow: 0 0 5px rgba(47, 209, 106, .6); }
+    .graph i.a { background: var(--amber); box-shadow: 0 0 5px rgba(255, 176, 0, .6); }
+    .graph i.r { background: var(--red); box-shadow: 0 0 5px rgba(227, 52, 43, .7); }
+    @media (max-width: 480px) { .graph { gap: 2px; padding: 6px; } }
+    .scale { display: flex; justify-content: space-between; font: 10px var(--mono); color: var(--ink-2); padding: 3px 8px 0; }
+    .space { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 10px; font: 600 14px var(--mono); font-variant-numeric: tabular-nums; }
+    .space .warn { color: var(--red); }
+    .parts { font-size: 13px; color: var(--ink-2); margin: 6px 0 0; }
+
+    /* --- program listing ---------------------------------------------------- */
+    textarea {
+      width: 100%; height: 360px; resize: vertical; display: block;
+      background: var(--screen); color: var(--phosphor);
+      font: 12.5px/1.5 var(--mono);
+      border: 0; border-radius: 3px; box-shadow: inset 0 0 0 6px #1b211d, inset 0 0 18px rgba(0, 0, 0, .8);
+      padding: 14px 16px; white-space: pre; overflow: auto;
+    }
+    .status { font: 12px var(--mono); color: var(--ink-2); }
+
+    .vome ol { margin: 0 0 8px; padding-left: 20px; max-width: 72ch; }
+    .vome li { margin-bottom: 4px; }
+
+    footer { display: flex; gap: 14px; flex-wrap: wrap; justify-content: space-between; font: 12px var(--mono); color: var(--ink-2); }
+
+    /* --- the preview, as an HMI ------------------------------------------- */
+    .modal { position: fixed; inset: 0; z-index: 90; background: rgba(20, 24, 26, .6); display: grid; place-items: center; padding: 16px; }
+    .modal[hidden] { display: none; }
+    .hmi {
+      width: 100%; max-width: 560px; background: var(--rail); color: #e8ebe6; border-radius: 8px; padding: 14px;
+      box-shadow: inset 0 1px 0 var(--rail-hi), 0 12px 40px rgba(0, 0, 0, .5); display: grid; gap: 12px;
+    }
+    .hmi header { display: flex; align-items: center; gap: 10px; }
+    .hmi header h2 { margin: 0; flex: 1; font: 700 15px var(--sans); letter-spacing: .08em; text-transform: uppercase; }
+    .hmi .x { background: none; border: 1px solid #6a7176; color: #e8ebe6; border-radius: 3px; width: 30px; height: 28px; font: 18px/1 var(--sans); cursor: pointer; }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+    /* Selector positions: the lit one is chosen, a dark one is open, a
+       hatched one is not fitted for this saver. */
+    .tab {
+      display: inline-flex; align-items: center; gap: 7px;
+      font: 600 12px var(--mono); letter-spacing: .05em; text-transform: uppercase;
+      color: #e8ebe6; background: #262a2d; border: 1px solid #5a6166; border-radius: 3px; padding: 7px 10px; cursor: pointer;
+    }
+    .tab::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--led-off); box-shadow: inset 0 0 0 1px #000; }
+    .tab[aria-selected="true"] { border-color: var(--orange); }
+    .tab[aria-selected="true"]::before { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+    .tab:disabled { cursor: not-allowed; color: #7d8489; border-style: dashed; background: repeating-linear-gradient(-45deg, #262a2d 0 5px, #2e3336 5px 10px); }
+    .tab:disabled::before { background: transparent; box-shadow: inset 0 0 0 1px #5a6166; }
+    .bezel { background: #111; border-radius: 6px; padding: 12px; display: grid; place-items: center; box-shadow: inset 0 0 0 2px #000, inset 0 2px 10px rgba(0, 0, 0, .9); }
+    .bezel img { display: block; width: 384px; max-width: 100%; height: auto; image-rendering: pixelated; }
+    .bezel.lcd img { width: 404px; image-rendering: auto; }
+    .bezel iframe { display: block; width: 320px; height: 240px; max-width: 100%; border: 0; background: #000; }
+    .hmi p { margin: 0; font-size: 13px; color: #b9c0bb; text-align: center; }
+    .acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+    /* The web version full screen, gone at a tap, a key or a move of the mouse. */
+    .saver { position: fixed; inset: 0; z-index: 100; background: #000; cursor: none; }
+    .saver iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .saver .catch { position: absolute; inset: 0; }
+    .saver .tip { position: absolute; left: 0; right: 0; bottom: 9%; text-align: center; color: #fff; font: 14px var(--sans);
+      text-shadow: 1px 1px 0 #000; pointer-events: none; animation: dim 3.5s ease-in forwards; }
+    @keyframes dim { 0%, 50% { opacity: .8; } 100% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .saver .tip { animation: none; opacity: .8; } .lamp.fault.on i { animation: none; } }
+  </style>
+</head>
+
+<body>
+  <main class="cabinet">
+    <section class="nameplate" aria-labelledby="title">
+      <div>
+        <h1 id="title">After Dark <span>/</span> ESPHome</h1>
+        <p>Put the After Dark screen savers on an ESP32 with a little screen, and pick one from Home Assistant. Switch on the modules you want, check they fit the flash, and copy the program into ESPHome. Only the modules you switch on go into the firmware.</p>
+      </div>
+      <div>
+        <div class="spec">MODEL <b>AD-ESP</b> · REV <b id="rev">v1.0.0</b><br>MODULES <b id="count">—</b> · BUS <b>I²C / SPI</b></div>
+        <div class="lamps"><span class="lamp run"><i></i>RUN</span><span class="lamp fault" id="fault"><i></i>FLASH FULL</span></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-cpu">
+      <header><h2 id="h-cpu"><span class="no">01</span>CPU and display</h2></header>
+      <div class="fields">
+        <label class="field"><span>Board</span>
+          <select id="board">
+            <option value="esp32s3">ESP32-S3 (Super Mini)</option>
+            <option value="esp32c3">ESP32-C3 (Super Mini)</option>
+          </select>
+        </label>
+        <label class="field"><span>Flash</span>
+          <select id="flash">
+            <option value="4MB">4 MB</option>
+            <option value="8MB">8 MB</option>
+            <option value="16MB">16 MB</option>
+          </select>
+        </label>
+        <label class="field"><span>Display</span>
+          <select id="screen">
+            <optgroup label="Colour">
+              <option value="ili9341">ILI9341, 320 × 240, SPI</option>
+            </optgroup>
+            <optgroup label="1-bit OLED">
+              <option value="sh1106">SH1106, 128 × 64, I²C (1.3")</option>
+              <option value="ssd1306">SSD1306, 128 × 64, I²C (0.96")</option>
+              <option value="ssd1306_32">SSD1306, 128 × 32, I²C</option>
+              <option value="ssd1306_72">SSD1306, 72 × 40, I²C (built onto C3 boards)</option>
+            </optgroup>
+            <optgroup label="Character LCD">
+              <option value="lcd1602">1602, 16 × 2, PCF8574 I²C backpack</option>
+              <option value="lcd2004">2004, 20 × 4, PCF8574 I²C backpack</option>
+            </optgroup>
+          </select>
+        </label>
+      </div>
+      <p class="hint" id="screen-note" style="margin: 10px 0 0"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="h-io">
+      <header>
+        <h2 id="h-io"><span class="no">02</span>Saver modules</h2>
+        <span class="grow"></span>
+        <button class="btn small" id="all" type="button">All on</button>
+        <button class="btn small" id="none" type="button">All off</button>
+      </header>
+      <p class="hint">Each saver is ported from its page on the <a href="https://vortitron.github.io/after-dark/">After Dark site</a>. On a 1-bit OLED its art is shrunk and redrawn in black and white; on a character LCD it is drawn with the panel's eight custom characters. Hatched modules have no version for this display.</p>
+      <div class="rail" id="list" aria-label="Screen savers"></div>
+      <div class="bar">
+        <label for="start">Start with</label>
+        <select id="start"></select>
+      </div>
+    </section>
+
+    <section class="panel" id="params-panel" aria-labelledby="h-par" hidden>
+      <header><h2 id="h-par"><span class="no">03</span>Parameters</h2></header>
+      <div class="params" id="params"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-flash">
+      <header><h2 id="h-flash"><span class="no">04</span>Flash load</h2></header>
+      <div class="graph" id="meter" role="meter" aria-label="Firmware size" aria-valuemin="0" aria-valuemax="100"></div>
+      <div class="scale" aria-hidden="true"><span>0</span><span>25</span><span>50</span><span>75</span><span>100 %</span></div>
+      <div class="space"><span id="used"></span><span id="left"></span></div>
+      <p class="parts" id="parts"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="h-prog">
+      <header><h2 id="h-prog"><span class="no">05</span>Program</h2></header>
+      <textarea id="yaml" readonly spellcheck="false" aria-label="ESPHome config"></textarea>
+      <div class="bar">
+        <span class="status" id="status">Pins are examples: change them to match your wiring. Wi-Fi comes from your secrets.yaml.</span>
+        <span class="grow"></span>
+        <button class="btn go" id="copy" type="button">Copy config</button>
+      </div>
+    </section>
+
+    <section class="panel vome" aria-labelledby="h-vome">
+      <header><h2 id="h-vome"><span class="no">06</span>Install with Vome</h2></header>
+      <p>If your Home Assistant is connected to <a href="https://vome.io/">Vome</a>, your AI assistant (Claude, Cursor, or any app that talks MCP) can put this on the board for you. It adds the config to ESPHome Device Builder, builds the firmware and installs it, and you approve each step.</p>
+      <ol>
+        <li>Add the Vome app to Home Assistant and make a key on its Agent tab, as <a href="https://github.com/Vortitron/home-assistant-mcp/tree/main/claude-plugin/vome-esphome">Vome's ESPHome guide</a> shows. Home Assistant needs the ESPHome Device Builder app too.</li>
+        <li>For a new board, plug it into the machine running Home Assistant by USB. After the first install, updates go over Wi-Fi.</li>
+        <li>Copy the request and paste it to your assistant.</li>
+      </ol>
+      <div class="bar">
+        <span class="status" id="vome-status">The request carries the program above, so set up the board and display first.</span>
+        <span class="grow"></span>
+        <button class="btn go" id="copy-request" type="button">Copy request</button>
+      </div>
+    </section>
+
+    <footer>
+      <a href="https://vortitron.github.io/after-dark/">&larr; The screen savers on the web</a>
+      <span>Sizes measured with ESPHome 2025.7.5 (ESP-IDF); expect a few KB either way.</span>
+      <a href="https://github.com/Vortitron/after-dark-esphome">Source and README</a>
+    </footer>
+  </main>
+
+  <div class="modal" id="preview" hidden>
+    <div class="hmi" role="dialog" aria-modal="true" aria-labelledby="preview-title">
+      <header>
+        <h2 id="preview-title">Preview</h2>
+        <button class="x" id="preview-x" type="button" aria-label="Close">&times;</button>
+      </header>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-mono" data-kind="mono" type="button">1-bit OLED</button>
+        <button class="tab" role="tab" id="tab-text" data-kind="text" type="button">16 &times; 2 LCD</button>
+        <button class="tab" role="tab" id="tab-colour" data-kind="colour" type="button">Colour</button>
+      </div>
+      <div class="bezel" id="preview-screen" role="tabpanel"></div>
+      <p id="preview-note"></p>
+      <div class="acts">
+        <button class="btn" id="preview-full" type="button">Full screen</button>
+        <a class="btn" id="preview-all" href="https://vortitron.github.io/after-dark/">All web versions</a>
+        <button class="btn go" id="preview-close" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    /* The component's release that configs pin, and where the web versions are. */
+    var VERSION = 'v1.0.0';
+    var SITE = 'https://vortitron.github.io/after-dark/';
+
+    /* The screens: which kind of saver they get, and their ESPHome block. */
+    var SCREENS = {
+      ili9341: { kind: 'colour', bus: 'spi', note: 'Colour panels get the original art at full size.',
+        block: function (p) {
+          return 'spi:\n  clk_pin: ' + p.clk + '\n  mosi_pin: ' + p.mosi + '\n\n' +
+            'display:\n  - platform: ili9xxx\n    id: screen\n    model: ILI9341\n' +
+            '    cs_pin: ' + p.cs + '\n    dc_pin: ' + p.dc + '\n    reset_pin: ' + p.rst + '\n' +
+            '    data_rate: 40MHz\n    invert_colors: false\n    dimensions:\n      width: 320\n      height: 240\n' +
+            '    transform:\n      swap_xy: true\n      mirror_x: true\n' +
+            '    update_interval: never     # after_dark pushes the frames\n    auto_clear_enabled: false\n\n' +
+            'output:\n  - platform: ledc\n    id: backlight_pwm\n    pin: ' + p.bl + '\n\n' +
+            'light:\n  - platform: monochromatic\n    name: Backlight\n    output: backlight_pwm\n    restore_mode: ALWAYS_ON\n';
+        } },
+      sh1106: { kind: 'mono', bus: 'i2c', model: 'SH1106_128X64', note: 'The art is shrunk to a third and baked to black and white.' },
+      ssd1306: { kind: 'mono', bus: 'i2c', model: 'SSD1306_128X64', note: 'The art is shrunk to a third and baked to black and white.' },
+      ssd1306_32: { kind: 'mono', bus: 'i2c', model: 'SSD1306_128X32', note: 'A quarter-size art set; busy savers are cramped at 32 lines.' },
+      ssd1306_72: { kind: 'mono', bus: 'i2c', model: 'SSD1306_72X40', note: 'The 0.42" OLED on some C3 boards, wired to GPIO5 and GPIO6. Tiny, but most savers still read.' },
+      lcd1602: { kind: 'text', bus: 'i2c', dims: '16x2', note: 'Only the savers with a character LCD version can be switched on. The panel needs 5 V; mind the I²C pull-ups (see the README).' },
+      lcd2004: { kind: 'text', bus: 'i2c', dims: '20x4', note: 'Only the savers with a character LCD version can be switched on. The panel needs 5 V; mind the I²C pull-ups (see the README).' }
+    };
+    var BOARDS = {
+      esp32s3: { id: 'esp32-s3-devkitc-1', psram: true,
+        pins: { clk: 'GPIO12', mosi: 'GPIO11', cs: 'GPIO10', dc: 'GPIO9', rst: 'GPIO8', bl: 'GPIO7', sda: 'GPIO5', scl: 'GPIO6' } },
+      esp32c3: { id: 'esp32-c3-devkitm-1', psram: false,
+        pins: { clk: 'GPIO4', mosi: 'GPIO6', cs: 'GPIO7', dc: 'GPIO5', rst: 'GPIO3', bl: 'GPIO1', sda: 'GPIO5', scl: 'GPIO6' } }
+    };
+    var SEGMENTS = 40;
+
+    var $ = function (id) { return document.getElementById(id); };
+    var data = null;
+    var chosen = {};   // saver -> true
+    var option = {};   // saver -> array (many) or string (one)
+
+    function kb(n) { return n >= 1048576 ? (n / 1048576).toFixed(2) + ' MB' : Math.round(n / 1024) + ' KB'; }
+    function kind() { return SCREENS[$('screen').value].kind; }
+
+    function base() {
+      var b = data.base[$('board').value], k = kind();
+      if (b[k] !== undefined) return b[k];
+      /* Not built for this pairing (an S3 with an LCD): the other board's base
+         for this kind, moved by how the two boards differ on a shared kind. */
+      var other = data.base[$('board').value === 'esp32s3' ? 'esp32c3' : 'esp32s3'];
+      return other[k] + (b.mono - other.mono);
+    }
+
+    function defaultOption(name) {
+      var o = data.savers[name].option, d = o.default[kind() === 'colour' ? 'colour' : 'mono'];
+      return o.many ? d.slice() : d;
+    }
+
+    function cost(name) {
+      var s = data.savers[name], k = kind();
+      if (k === 'text') return s.bytes.text || 0;
+      if (name === 'fishpro') {
+        var sp = s.options.species, n = sp.none[k];
+        (option.fishpro || defaultOption('fishpro')).forEach(function (f) { n += sp.each[f][k]; });
+        return n;
+      }
+      if (name === 'clocks') return s.options.face[option.clocks || defaultOption('clocks')][k];
+      return s.bytes[k];
+    }
+
+    function available(name) { return kind() !== 'text' || data.savers[name].text; }
+
+    function buildList() {
+      var list = $('list');
+      list.textContent = '';
+      Object.keys(data.savers).forEach(function (name, i) {
+        var s = data.savers[name];
+        var mod = document.createElement('div');
+        mod.className = 'mod';
+        mod.dataset.name = name;
+        var id = 'pick-' + name;
+        mod.innerHTML =
+          '<div class="terms" aria-hidden="true"></div>' +
+          '<div class="top"><span class="code">AD-' + String(i + 1).padStart(2, '0') + '</span><span class="led" aria-hidden="true"></span></div>' +
+          '<label class="plate" for="' + id + '"><b></b><small></small></label>' +
+          '<div class="readout"></div>' +
+          '<div class="ctl"><span class="sw"><input type="checkbox" id="' + id + '"><i aria-hidden="true"></i></span>' +
+          '<button class="btn small look" type="button">View</button></div>';
+        mod.querySelector('b').textContent = s.title;
+        mod.querySelector('.look').setAttribute('aria-label', 'Preview ' + s.title);
+        list.appendChild(mod);
+        mod.querySelector('.look').addEventListener('click', function () { openPreview(name); });
+        mod.querySelector('input').addEventListener('change', function (e) {
+          chosen[name] = e.target.checked;
+          update();
+        });
+      });
+      $('count').textContent = Object.keys(data.savers).length;
+    }
+
+    /* A saver's options, in the parameters panel while it is switched on. */
+    function buildParams() {
+      var box = $('params'), k = kind(), any = false;
+      Object.keys(data.savers).forEach(function (name) {
+        var s = data.savers[name], o = s.option;
+        if (!o) return;
+        var row = box.querySelector('[data-for="' + name + '"]');
+        var show = chosen[name] && available(name) && k !== 'text';
+        if (!show) { if (row) row.hidden = true; return; }
+        any = true;
+        if (!option[name]) option[name] = defaultOption(name);
+        if (!row) {
+          row = document.createElement('div');
+          row.className = 'param';
+          row.dataset.for = name;
+          box.appendChild(row);
+        }
+        row.hidden = false;
+        /* Rebuilt only when the kind of screen changes, so focus stays put. */
+        if (row.dataset.kind === k) {
+          Array.prototype.forEach.call(row.querySelectorAll('input'), function (input) {
+            var key = input.value;
+            input.checked = o.many ? option[name].indexOf(key) >= 0 : option[name] === key;
+          });
+          return;
+        }
+        row.dataset.kind = k;
+        row.textContent = '';
+        var h = document.createElement('h3');
+        h.textContent = s.title;
+        var sm = document.createElement('small');
+        sm.textContent = o.label + (o.many ? ' (one or more)' : '');
+        h.appendChild(sm);
+        row.appendChild(h);
+        var choices = document.createElement('div');
+        choices.className = 'choices';
+        choices.setAttribute('role', 'group');
+        choices.setAttribute('aria-label', s.title + ' ' + o.label);
+        Object.keys(o.choices).forEach(function (key) {
+          var wrap = document.createElement('label');
+          wrap.className = 'choice';
+          var input = document.createElement('input');
+          input.type = o.many ? 'checkbox' : 'radio';
+          input.name = 'opt-' + name;
+          input.value = key;
+          input.checked = o.many ? option[name].indexOf(key) >= 0 : option[name] === key;
+          var face = document.createElement('span');
+          face.textContent = o.choices[key];
+          var size = '';
+          if (name === 'fishpro' && k === 'colour') size = kb(s.options.species.each[key].colour);
+          if (name === 'clocks') size = kb(s.options.face[key][k]);
+          if (size) { var z = document.createElement('small'); z.textContent = size; face.appendChild(z); }
+          input.addEventListener('change', function () {
+            if (o.many) {
+              var on = option[name].filter(function (x) { return x !== key; });
+              if (input.checked) on.push(key);
+              if (!on.length) { input.checked = true; return; }  // keep at least one
+              option[name] = Object.keys(o.choices).filter(function (x) { return on.indexOf(x) >= 0; });
+            } else {
+              option[name] = key;
+            }
+            update();
+          });
+          wrap.appendChild(input);
+          wrap.appendChild(face);
+          choices.appendChild(wrap);
+        });
+        row.appendChild(choices);
+      });
+      $('params-panel').hidden = !any;
+    }
+
+    function picked() {
+      return Object.keys(data.savers).filter(function (n) { return chosen[n] && available(n); });
+    }
+
+    /* The bar graph: green to three quarters, amber to nine tenths, red
+       above that, and all red with the fault lamp when it doesn't fit. */
+    function meter(pct, over) {
+      var g = $('meter'), lit = over ? SEGMENTS : Math.round(Math.min(100, pct) / 100 * SEGMENTS);
+      if (g.children.length !== SEGMENTS) {
+        g.textContent = '';
+        for (var i = 0; i < SEGMENTS; i++) g.appendChild(document.createElement('i'));
+      }
+      Array.prototype.forEach.call(g.children, function (seg, i) {
+        var at = (i + 1) / SEGMENTS;
+        seg.className = i >= lit ? '' : over || at > 0.9 ? 'r' : at > 0.75 ? 'a' : 'g';
+      });
+      g.setAttribute('aria-valuenow', Math.round(pct));
+      $('fault').classList.toggle('on', over);
+    }
+
+    function update() {
+      $('screen-note').textContent = SCREENS[$('screen').value].note;
+      Array.prototype.forEach.call($('list').querySelectorAll('.mod'), function (mod) {
+        var name = mod.dataset.name, s = data.savers[name], ok = available(name);
+        var input = mod.querySelector('input');
+        input.disabled = !ok;
+        input.checked = ok && !!chosen[name];
+        mod.classList.toggle('na', !ok);
+        mod.classList.toggle('on', ok && !!chosen[name]);
+        mod.querySelector('small').textContent = ok ? s.about : 'No character LCD version.';
+        mod.querySelector('.plate').title = s.about;
+        mod.querySelector('.readout').textContent = ok ? kb(cost(name)) : 'N/A';
+      });
+      buildParams();
+
+      var names = picked();
+      var start = $('start'), was = start.value;
+      start.textContent = '';
+      names.concat(['off']).forEach(function (n) {
+        var o = document.createElement('option');
+        o.value = n;
+        o.textContent = n === 'off' ? 'Off' : data.savers[n].title;
+        start.appendChild(o);
+      });
+      if (names.indexOf(was) >= 0 || was === 'off') start.value = was;
+
+      var savers = names.reduce(function (t, n) { return t + cost(n); }, 0);
+      var total = base() + savers, slot = data.app_slot[$('flash').value];
+      var pct = total / slot * 100;
+      meter(pct, total > slot);
+      $('used').textContent = kb(total) + ' of ' + kb(slot) + ' (' + Math.round(pct) + '%)';
+      var left = $('left');
+      if (total > slot) {
+        left.className = 'warn';
+        left.textContent = 'Over by ' + kb(total - slot) + ': switch a module off or choose more flash.';
+      } else {
+        left.className = '';
+        left.textContent = kb(slot - total) + ' free';
+      }
+      $('parts').textContent = 'ESPHome with Wi-Fi, the API, OTA and the display: ' + kb(base()) +
+        '. ' + names.length + ' saver' + (names.length === 1 ? '' : 's') + ': ' + kb(savers) +
+        '. The slot is half the flash less a little, as there are two of them for OTA updates.';
+      $('yaml').value = yaml(names);
+    }
+
+    function yaml(names) {
+      var b = BOARDS[$('board').value], scr = SCREENS[$('screen').value], p = b.pins, k = scr.kind;
+      var y = '# After Dark for ESPHome, from vortitron.github.io/after-dark-esphome\n\n' +
+        'esphome:\n  name: after-dark\n  friendly_name: After Dark\n\n' +
+        'esp32:\n  board: ' + b.id + '\n  flash_size: ' + $('flash').value + '\n  framework:\n    type: esp-idf\n\n' +
+        (b.psram && k === 'colour' ? 'psram:\n  mode: quad\n\n' : '') +
+        'external_components:\n  - source: github://Vortitron/after-dark-esphome@' + VERSION + '\n    components: [after_dark]\n\n' +
+        'logger:\n\nwifi:\n  ssid: !secret wifi_ssid\n  password: !secret wifi_password\n\napi:\nota:\n  - platform: esphome\n\n' +
+        'time:\n  - platform: sntp\n    id: sntp_time\n\n';
+      if (scr.bus === 'spi') {
+        y += scr.block(p);
+      } else {
+        y += 'i2c:\n  sda: ' + p.sda + '\n  scl: ' + p.scl + '\n  frequency: ' + (k === 'text' ? '100kHz' : '400kHz') + '\n\n';
+        if (k === 'text') {
+          y += 'display:\n  - platform: lcd_pcf8574\n    id: lcd\n    dimensions: ' + scr.dims +
+            '\n    address: 0x27   # some backpacks are 0x3F\n    update_interval: never     # after_dark pushes the frames\n';
+        } else {
+          y += 'display:\n  - platform: ssd1306_i2c\n    id: screen\n    model: ' + scr.model +
+            '\n    address: 0x3C\n    update_interval: never     # after_dark pushes the frames\n    auto_clear_enabled: false\n';
+        }
+      }
+      y += '\nafter_dark:\n  ' + (k === 'text' ? 'lcd_id: lcd' : 'display_id: screen') + '\n  time_id: sntp_time\n';
+      if (names.length) {
+        y += '  savers:\n';
+        names.forEach(function (n) {
+          var s = data.savers[n];
+          if (s.option && k !== 'text') {
+            var v = option[n] || defaultOption(n);
+            y += '    - ' + n + ':\n        ' + s.option.key + ': ' + (s.option.many ? '[' + v.join(', ') + ']' : v) + '\n';
+          } else if (n === 'dosshell') {
+            y += '    - dosshell          # or type Home Assistant data as commands:\n' +
+              '    # - dosshell:\n' +
+              '    #     style: unix     # a name$ prompt and bash\'s errors\n' +
+              '    #     commands:\n' +
+              '    #       - name: weather\n' +
+              '    #         entities: [sensor.outdoor_temperature, weather.home]\n' +
+              '    #       - name: doors\n' +
+              '    #         entities: [binary_sensor.front_door, binary_sensor.back_door]\n';
+          } else {
+            y += '    - ' + n + '\n';
+          }
+        });
+        y += '  saver: ' + ($('start').value || names[0]) + '\n';
+      } else {
+        y += '  # switch on at least one saver module above\n';
+      }
+      y += '\nselect:\n  - platform: after_dark\n    name: Screensaver\n';
+      return y;
+    }
+
+    $('copy').addEventListener('click', function () {
+      var text = $('yaml').value, status = $('status');
+      function fallback() { $('yaml').focus(); $('yaml').select(); status.textContent = 'Selected: press Ctrl+C to copy.'; }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { status.textContent = 'Copied.'; }, fallback);
+      } else {
+        fallback();
+      }
+    });
+    $('all').addEventListener('click', function () { Object.keys(data.savers).forEach(function (n) { chosen[n] = true; }); update(); });
+    $('none').addEventListener('click', function () { chosen = {}; update(); });
+    ['board', 'flash', 'screen'].forEach(function (id) {
+      $(id).addEventListener('change', function () {
+        if (id === 'screen') {
+          option = {};  // defaults differ between colour and 1-bit
+          Array.prototype.forEach.call(document.querySelectorAll('.param'), function (r) { delete r.dataset.kind; });
+        }
+        update();
+      });
+    });
+    $('start').addEventListener('change', function () { $('yaml').value = yaml(picked()); });
+
+
+    /* ------------------------------------------------------- preview -- */
+
+    var previewing = null, lastFocus = null;
+    var NOTES = {
+      mono: 'As the ESP32 draws it on a 128 × 64 OLED: the art shrunk and baked to black and white.',
+      text: 'As the ESP32 draws it on a 16 × 2 character LCD, with the panel’s eight custom characters.',
+      colour: 'On a colour panel the ESP32 draws the original art, as the web version does.'
+    };
+
+    function showTab(k) {
+      var s = data.savers[previewing], screen = $('preview-screen');
+      ['mono', 'text', 'colour'].forEach(function (t) {
+        $('tab-' + t).setAttribute('aria-selected', String(t === k));
+      });
+      screen.textContent = '';
+      screen.className = 'bezel' + (k === 'text' ? ' lcd' : '');
+      if (k === 'colour') {
+        var f = document.createElement('iframe');
+        f.src = SITE + 'all/' + s.page;
+        f.title = s.title + ', the web version';
+        f.setAttribute('scrolling', 'no');
+        screen.appendChild(f);
+      } else {
+        var img = document.createElement('img');
+        img.src = 'previews/' + (k === 'text' ? 'lcd/' : 'oled/') + previewing + '.gif';
+        img.alt = s.title + (k === 'text' ? ' on a 16 × 2 character LCD' : ' on a 128 × 64 OLED');
+        img.width = k === 'text' ? 404 : 384;
+        img.height = k === 'text' ? 92 : 192;
+        screen.appendChild(img);
+      }
+      $('preview-note').textContent = NOTES[k];
+    }
+
+    function openPreview(name) {
+      var s = data.savers[name];
+      previewing = name;
+      lastFocus = document.activeElement;
+      $('preview-title').textContent = s.title;
+      $('tab-text').disabled = !s.text;
+      $('preview-all').href = SITE + 'index.html#' + s.page.replace(/\.html$/, '');
+      var k = kind();
+      if (k === 'text' && !s.text) k = 'mono';
+      $('preview').hidden = false;
+      showTab(k);
+      $('preview-close').focus();
+    }
+
+    function closePreview() {
+      if ($('preview').hidden) return;
+      $('preview').hidden = true;
+      $('preview-screen').textContent = '';  // stops the web version if it was running
+      previewing = null;
+      if (lastFocus) lastFocus.focus();
+    }
+
+    ['mono', 'text', 'colour'].forEach(function (t) {
+      $('tab-' + t).addEventListener('click', function () { showTab(t); });
+    });
+    $('preview-close').addEventListener('click', closePreview);
+    $('preview-x').addEventListener('click', closePreview);
+    $('preview').addEventListener('mousedown', function (e) { if (e.target === this) closePreview(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !saver) closePreview();
+    });
+
+    /* The web version full screen. Like a real screen saver it goes at a tap,
+       a key, or a move of the mouse, once the first second is over. */
+    var saver = null, origin = null, startedAt = 0;
+
+    function stopSaver() {
+      if (!saver) return;
+      var box = saver;
+      saver = null;
+      document.removeEventListener('keydown', onSaverKey, true);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+      var fs = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fs) {
+        var exit = document.exitFullscreen || document.webkitExitFullscreen;
+        try { exit.call(document); } catch (e) {}
+      }
+      box.parentNode.removeChild(box);
+      $('preview-full').focus();
+    }
+    function onSaverKey(e) { e.preventDefault(); e.stopPropagation(); stopSaver(); }
+    function onFullscreenChange() {
+      if (saver && !(document.fullscreenElement || document.webkitFullscreenElement)) stopSaver();
+    }
+    function onSaverMove(e) {
+      if (Date.now() - startedAt < 1000) { origin = null; return; }
+      if (!origin) { origin = { x: e.clientX, y: e.clientY }; return; }
+      if (Math.abs(e.clientX - origin.x) + Math.abs(e.clientY - origin.y) > 8) stopSaver();
+    }
+
+    function startSaver() {
+      if (saver || !previewing) return;
+      var s = data.savers[previewing];
+      var box = document.createElement('div');
+      box.className = 'saver';
+      var f = document.createElement('iframe');
+      f.src = SITE + 'all/' + s.page;
+      f.title = s.title + ' screen saver';
+      f.setAttribute('scrolling', 'no');
+      var catcher = document.createElement('div');
+      catcher.className = 'catch';
+      var tip = document.createElement('div');
+      tip.className = 'tip';
+      tip.textContent = 'Tap, press a key or move the mouse to stop';
+      box.appendChild(f);
+      box.appendChild(catcher);
+      box.appendChild(tip);
+      document.body.appendChild(box);
+      saver = box;
+      origin = null;
+      startedAt = Date.now();
+      box.addEventListener('mousedown', stopSaver);
+      box.addEventListener('touchstart', stopSaver, { passive: true });
+      box.addEventListener('mousemove', onSaverMove);
+      document.addEventListener('keydown', onSaverKey, true);
+      document.addEventListener('fullscreenchange', onFullscreenChange);
+      document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+      var go = box.requestFullscreen || box.webkitRequestFullscreen;
+      if (go) {
+        try { var p = go.call(box); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+      }
+    }
+    $('preview-full').addEventListener('click', startSaver);
+
+    /* ---------------------------------------------------------- Vome -- */
+
+    function request() {
+      var board = $('board'), screen = $('screen');
+      return 'Please use Vome to put this After Dark screen saver config on my ESP32: add it to ESPHome ' +
+        'Device Builder as a new device called after-dark, then build it and install it.\n\n' +
+        'The board is an ' + board.options[board.selectedIndex].text + ' with ' + $('flash').options[$('flash').selectedIndex].text +
+        ' of flash, and the screen is ' + screen.options[screen.selectedIndex].text + '. ' +
+        'If the board has never had ESPHome on it, it is plugged into the Home Assistant machine by USB: ' +
+        'use that port for the first install. My Wi-Fi details are in Device Builder’s secrets as ' +
+        'wifi_ssid and wifi_password. The pins in the config are examples; ask me before changing them.\n\n' +
+        '```yaml\n' + $('yaml').value + '```\n';
+    }
+
+    $('copy-request').addEventListener('click', function () {
+      var text = request(), status = $('vome-status');
+      function fallback() {
+        $('yaml').value = text;
+        $('yaml').focus();
+        $('yaml').select();
+        status.textContent = 'The request is in the program box, selected: press Ctrl+C to copy it.';
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          status.textContent = 'Copied. Paste it to your assistant.';
+        }, fallback);
+      } else {
+        fallback();
+      }
+    });
+
+    $('rev').textContent = VERSION;
+    meter(0, false);
+    fetch('savers.json').then(function (r) { return r.json(); }).then(function (d) {
+      data = d;
+      /* A start that fits a 4 MB board with room to spare. */
+      ['toasters', 'warp', 'starry_night', 'messages', 'zot', 'fishpro', 'clocks', 'nocturne'].forEach(function (n) { chosen[n] = true; });
+      buildList();
+      $('board').value = 'esp32c3';
+      $('screen').value = 'sh1106';
+      update();
+    }).catch(function () {
+      $('list').textContent = 'The list of savers didn\u2019t load. Reload the page to try again.';
+    });
+  }());
+  </script>
+</body>
+
+</html>
