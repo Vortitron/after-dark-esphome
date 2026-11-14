@@ -271,6 +271,9 @@
     /* The web version full screen, gone at a tap, a key or a move of the mouse. */
     .saver { position: fixed; inset: 0; z-index: 100; background: #000; cursor: none; }
     .saver iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .saver img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+    .bezel img.colour { display: block; width: 320px; height: 240px; max-width: 100%; height: auto; image-rendering: pixelated; }
+    .acts .btn[hidden] { display: none; }
     .saver .catch { position: absolute; inset: 0; }
     .saver .tip { position: absolute; left: 0; right: 0; bottom: 9%; text-align: center; color: #fff; font: 14px var(--sans);
       text-shadow: 1px 1px 0 #000; pointer-events: none; animation: dim 3.5s ease-in forwards; }
@@ -287,7 +290,7 @@
         <p>Put the After Dark screen savers on an ESP32 with a little screen, and pick one from Home Assistant. Switch on the modules you want, check they fit the flash, and copy the program into ESPHome. Only the modules you switch on go into the firmware.</p>
       </div>
       <div>
-        <div class="spec">MODEL <b>AD-ESP</b> · REV <b id="rev">v1.0.0</b><br>MODULES <b id="count">—</b> · BUS <b>I²C / SPI</b></div>
+        <div class="spec">MODEL <b>AD-ESP</b> · REV <b id="rev">v1.1.0</b><br>MODULES <b id="count">—</b> · BUS <b>I²C / SPI</b></div>
         <div class="lamps"><span class="lamp run"><i></i>RUN</span><span class="lamp fault" id="fault"><i></i>FLASH FULL</span></div>
       </div>
     </section>
@@ -336,7 +339,7 @@
         <button class="btn small" id="all" type="button">All on</button>
         <button class="btn small" id="none" type="button">All off</button>
       </header>
-      <p class="hint">Each saver is ported from its page on the <a href="https://vortitron.github.io/after-dark/">After Dark site</a>. On a 1-bit OLED its art is shrunk and redrawn in black and white; on a character LCD it is drawn with the panel's eight custom characters. Hatched modules have no version for this display.</p>
+      <p class="hint">Each AD module is ported from its page on the <a href="https://vortitron.github.io/after-dark/">After Dark site</a>. On a 1-bit OLED its art is shrunk and redrawn in black and white; on a character LCD it is drawn with the panel's eight custom characters. The EX modules are extras from outside After Dark: Dolphins, drawn for this in the style of the cyan OEL car stereos, and Pioneer, the stereos' own dolphin clips (400 KB, so it is left out of a config that doesn't list it). Hatched modules have no version for this display.</p>
       <div class="rail" id="list" aria-label="Screen savers"></div>
       <div class="bar">
         <label for="start">Start with</label>
@@ -415,7 +418,7 @@
     'use strict';
 
     /* The component's release that configs pin, and where the web versions are. */
-    var VERSION = 'v1.0.0';
+    var VERSION = 'v1.1.0';
     var SITE = 'https://vortitron.github.io/after-dark/';
 
     /* The screens: which kind of saver they get, and their ESPHome block. */
@@ -477,6 +480,11 @@
         return n;
       }
       if (name === 'clocks') return s.options.face[option.clocks || defaultOption('clocks')][k];
+      if (name === 'pioneer') {
+        var cl = s.options.clips, m = cl.none[k];
+        (option.pioneer || defaultOption('pioneer')).forEach(function (c) { m += cl.each[c][k]; });
+        return m;
+      }
       return s.bytes[k];
     }
 
@@ -485,15 +493,16 @@
     function buildList() {
       var list = $('list');
       list.textContent = '';
-      Object.keys(data.savers).forEach(function (name, i) {
-        var s = data.savers[name];
+      var counts = { AD: 0, EX: 0 };
+      Object.keys(data.savers).forEach(function (name) {
+        var s = data.savers[name], series = s.extra ? 'EX' : 'AD';
         var mod = document.createElement('div');
         mod.className = 'mod';
         mod.dataset.name = name;
         var id = 'pick-' + name;
         mod.innerHTML =
           '<div class="terms" aria-hidden="true"></div>' +
-          '<div class="top"><span class="code">AD-' + String(i + 1).padStart(2, '0') + '</span><span class="led" aria-hidden="true"></span></div>' +
+          '<div class="top"><span class="code">' + series + '-' + String(++counts[series]).padStart(2, '0') + '</span><span class="led" aria-hidden="true"></span></div>' +
           '<label class="plate" for="' + id + '"><b></b><small></small></label>' +
           '<div class="readout"></div>' +
           '<div class="ctl"><span class="sw"><input type="checkbox" id="' + id + '"><i aria-hidden="true"></i></span>' +
@@ -561,6 +570,7 @@
           var size = '';
           if (name === 'fishpro' && k === 'colour') size = kb(s.options.species.each[key].colour);
           if (name === 'clocks') size = kb(s.options.face[key][k]);
+          if (name === 'pioneer') size = kb(s.options.clips.each[key][k]);
           if (size) { var z = document.createElement('small'); z.textContent = size; face.appendChild(z); }
           input.addEventListener('change', function () {
             if (o.many) {
@@ -726,7 +736,8 @@
     var NOTES = {
       mono: 'As the ESP32 draws it on a 128 × 64 OLED: the art shrunk and baked to black and white.',
       text: 'As the ESP32 draws it on a 16 × 2 character LCD, with the panel’s eight custom characters.',
-      colour: 'On a colour panel the ESP32 draws the original art, as the web version does.'
+      colour: 'On a colour panel the ESP32 draws the original art, as the web version does.',
+      extra: 'As the ESP32 draws it on a 320 × 240 colour panel.'
     };
 
     function showTab(k) {
@@ -736,7 +747,15 @@
       });
       screen.textContent = '';
       screen.className = 'bezel' + (k === 'text' ? ' lcd' : '');
-      if (k === 'colour') {
+      if (k === 'colour' && !s.page) {
+        var pic = document.createElement('img');
+        pic.className = 'colour';
+        pic.src = 'previews/colour/' + previewing + '.gif';
+        pic.alt = s.title + ' on a 320 × 240 colour panel';
+        pic.width = 320;
+        pic.height = 240;
+        screen.appendChild(pic);
+      } else if (k === 'colour') {
         var f = document.createElement('iframe');
         f.src = SITE + 'all/' + s.page;
         f.title = s.title + ', the web version';
@@ -750,7 +769,7 @@
         img.height = k === 'text' ? 92 : 192;
         screen.appendChild(img);
       }
-      $('preview-note').textContent = NOTES[k];
+      $('preview-note').textContent = k === 'colour' && !s.page ? NOTES.extra : NOTES[k];
     }
 
     function openPreview(name) {
@@ -759,7 +778,8 @@
       lastFocus = document.activeElement;
       $('preview-title').textContent = s.title;
       $('tab-text').disabled = !s.text;
-      $('preview-all').href = SITE + 'index.html#' + s.page.replace(/\.html$/, '');
+      $('preview-all').hidden = !s.page;
+      if (s.page) $('preview-all').href = SITE + 'index.html#' + s.page.replace(/\.html$/, '');
       var k = kind();
       if (k === 'text' && !s.text) k = 'mono';
       $('preview').hidden = false;
@@ -819,10 +839,17 @@
       var s = data.savers[previewing];
       var box = document.createElement('div');
       box.className = 'saver';
-      var f = document.createElement('iframe');
-      f.src = SITE + 'all/' + s.page;
-      f.title = s.title + ' screen saver';
-      f.setAttribute('scrolling', 'no');
+      var f;
+      if (s.page) {
+        f = document.createElement('iframe');
+        f.src = SITE + 'all/' + s.page;
+        f.title = s.title + ' screen saver';
+        f.setAttribute('scrolling', 'no');
+      } else {
+        f = document.createElement('img');
+        f.src = 'previews/colour/' + previewing + '.gif';
+        f.alt = s.title + ' screen saver';
+      }
       var catcher = document.createElement('div');
       catcher.className = 'catch';
       var tip = document.createElement('div');

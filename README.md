@@ -12,7 +12,7 @@ component to a config yourself:
 
 ```yaml
 external_components:
-  - source: github://Vortitron/after-dark-esphome@v1.0.0
+  - source: github://Vortitron/after-dark-esphome@v1.1.0
     components: [after_dark]
 ```
 
@@ -59,6 +59,20 @@ a change.
 | `warp` | Warp! | ✓ (outward) |
 | `zot` | Zot! | ✓ |
 
+Two extras, from outside After Dark, in the spirit of the cyan organic-EL
+car stereos of the early 2000s and their famous dolphins:
+
+| Saver | What | Character LCD |
+|---|---|---|
+| `dolphins` | An original saver, drawn in code: a pod leaping at sea (by moonlight, or in silhouette at dawn) and swimming the deep among kelp and light shafts, dithered to a dot matrix like the stereo's panel | ✓ hand-drawn |
+| `pioneer` | The dolphin clips from Pioneer's own stereos, as recorded; pick the `clips`. 400 KB, so only built in when listed | |
+
+The Pioneer clips are Pioneer's: 60 frames of 256×64 underwater dolphins
+(`movie8_f.lkd`) and 149 frames of 128×33 diver and dolphins
+(`alt_diverdolphins.lkd`), from the files the stereos' OEL Screen Saver Studio
+loaded. [carozerra](https://github.com/youxufkhan/carozerra) worked out the
+`.lkd` format and keeps the clips; `tools/lkd2c.py` converts them.
+
 Each kind of screen gets the saver a different way:
 
 | Screen | Example | How the savers draw |
@@ -93,7 +107,7 @@ display:
 
 after_dark:
   display_id: screen            # or lcd_id: for a character LCD
-  savers:                       # compiled in (default: all)
+  savers:                       # compiled in (default: all but pioneer)
     - toasters
     - warp
     - fishpro:                  # some savers take options under their name
@@ -125,6 +139,10 @@ goes in:
   `mutating` (the module's default: ten photographs, 189 KB). On a 1-bit
   panel the default is `melting_digital`, as the photographs don't read as a
   clock at a third size.
+- `pioneer: clips:` `dolphins` (240 KB) and/or `diver` (154 KB). Default:
+  both. Each plays as the stereo did, at 60 ms a frame, scaled to the screen's
+  width; on a 128×64 OLED the 256-wide clip is shown dot for dot and pans
+  across, as halving it loses the dither the picture is made of.
 - `dosshell: commands:` Home Assistant data, typed as DOS commands. Each
   command is answered with a line an entity: its label on the left (the
   friendly name unless you give one) and its state on the right with its
@@ -299,9 +317,10 @@ compilers (`docs/savers.json`) and errs a few per cent high.
   frames as run-length rows; `--scale`/`--mono` for small screens, `--cells`
   for 3.x strips, `--index` for a trimmed index from `tools/index/`).
   `font2c.py` makes the fonts, `words2c.py` Nonsense's grammar and
-  `einstein2c.py` Einstein's chalk. `measure.py` writes the builder's sizes
+  `einstein2c.py` Einstein's chalk, `lkd2c.py` Pioneer's clips. `measure.py` writes the builder's sizes
   (`savers.json` beside it holds each saver's name, page and note), and
-  `previews.sh` renders its previews into `docs/previews/`.
+  `previews.sh` renders its previews into `docs/previews/` (and, for the
+  extras, which have no After Dark page to show, colour ones too).
 - `docs/`: the builder (GitHub Pages), its size table and previews.
 - `examples/`: whole configs for each kind of screen.
 - `host/`: renders a saver on the desktop, so a port can be checked frame by

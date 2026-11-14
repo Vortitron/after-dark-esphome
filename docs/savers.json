@@ -6,22 +6,22 @@
  },
  "base": {
   "esp32c3": {
-   "colour": 896527,
-   "mono": 844889,
-   "text": 841015
+   "colour": 896532,
+   "mono": 844890,
+   "text": 841016
   },
   "esp32s3": {
-   "colour": 851607,
-   "mono": 804033
+   "colour": 851612,
+   "mono": 804034
   }
  },
  "savers": {
   "boris": {
    "about": "The kitten, chasing butterflies.",
    "bytes": {
-    "colour": 78768,
-    "mono": 50123,
-    "text": 10210
+    "colour": 78760,
+    "mono": 50122,
+    "text": 10211
    },
    "module": "BORIS.AD",
    "page": "boris.html",
@@ -31,8 +31,8 @@
   "bugs": {
    "about": "A swarm of bugs crawling about.",
    "bytes": {
-    "colour": 140583,
-    "mono": 82163
+    "colour": 140575,
+    "mono": 82166
    },
    "module": "BUGS.AD",
    "page": "bugs.html",
@@ -42,9 +42,9 @@
   "clocks": {
    "about": "The time, drifting about. Pick a face; only its art goes in.",
    "bytes": {
-    "colour": 197043,
-    "mono": 79389,
-    "text": 1894
+    "colour": 197031,
+    "mono": 79390,
+    "text": 1893
    },
    "module": "CLOCKS3.AD",
    "option": {
@@ -66,24 +66,24 @@
    "options": {
     "face": {
      "art_deco": {
-      "colour": 26723,
-      "mono": 79383
+      "colour": 26711,
+      "mono": 79384
      },
      "classic": {
-      "colour": 39365,
-      "mono": 79383
+      "colour": 39353,
+      "mono": 79384
      },
      "melting_digital": {
-      "colour": 110382,
-      "mono": 79379
+      "colour": 110370,
+      "mono": 79380
      },
      "modern": {
-      "colour": 32679,
-      "mono": 79383
+      "colour": 32667,
+      "mono": 79384
      },
      "mutating": {
-      "colour": 197035,
-      "mono": 79381
+      "colour": 197023,
+      "mono": 79382
      }
     }
    },
@@ -91,12 +91,23 @@
    "text": true,
    "title": "Clocks 3.0"
   },
+  "dolphins": {
+   "about": "A pod leaping at sea and swimming the deep, in the style of a cyan OEL car stereo.",
+   "bytes": {
+    "colour": 13401,
+    "mono": 17895,
+    "text": 3691
+   },
+   "extra": true,
+   "text": true,
+   "title": "Dolphins"
+  },
   "dosshell": {
    "about": "A PC typing to itself at the C:\\> prompt, or typing your Home Assistant data as commands.",
    "bytes": {
-    "colour": 14264,
-    "mono": 15196,
-    "text": 9836
+    "colour": 16675,
+    "mono": 17741,
+    "text": 12535
    },
    "module": "DOSSHELL.AD",
    "page": "dosshell.html",
@@ -106,9 +117,9 @@
   "einstein": {
    "about": "Lines and equations chalked on a blackboard.",
    "bytes": {
-    "colour": 18201,
-    "mono": 19480,
-    "text": 4974
+    "colour": 18189,
+    "mono": 19479,
+    "text": 4973
    },
    "module": "EINSTEIN.AD",
    "page": "einstein.html",
@@ -118,9 +129,9 @@
   "fishpro": {
    "about": "An aquarium. Pick the species; each one's art goes in only if chosen.",
    "bytes": {
-    "colour": 277081,
-    "mono": 82264,
-    "text": 2142
+    "colour": 277069,
+    "mono": 82263,
+    "text": 2141
    },
    "module": "FISHPRO.AD",
    "option": {
@@ -201,8 +212,8 @@
       }
      },
      "none": {
-      "colour": 87761,
-      "mono": 82264
+      "colour": 87749,
+      "mono": 82263
      }
     }
    },
@@ -213,9 +224,9 @@
   "flocks": {
    "about": "Flocks of birds wheeling across the screen.",
    "bytes": {
-    "colour": 13876,
-    "mono": 12775,
-    "text": 3046
+    "colour": 13868,
+    "mono": 12770,
+    "text": 3041
    },
    "module": "FLOCKS.AD",
    "page": "flocks.html",
@@ -225,8 +236,8 @@
   "geobounce": {
    "about": "A Platonic solid tumbling about.",
    "bytes": {
-    "colour": 5165,
-    "mono": 7004
+    "colour": 5157,
+    "mono": 7009
    },
    "module": "GEOBOUNC.AD",
    "page": "geobounce.html",
@@ -236,8 +247,8 @@
   "gravity": {
    "about": "Balls dropping and bouncing; never cleared.",
    "bytes": {
-    "colour": 1629,
-    "mono": 2186
+    "colour": 1625,
+    "mono": 2189
    },
    "module": "GRAVITY.AD",
    "page": "gravity.html",
@@ -247,9 +258,9 @@
   "hard_rain": {
    "about": "Raindrops rippling on the desktop.",
    "bytes": {
-    "colour": 14935,
-    "mono": 15814,
-    "text": 15746
+    "colour": 14927,
+    "mono": 15815,
+    "text": 15747
    },
    "module": "RAIN.AD",
    "page": "hardrain.html",
@@ -259,8 +270,8 @@
   "mandelbrot": {
    "about": "Zooming for ever into the set.",
    "bytes": {
-    "colour": 3013,
-    "mono": 3816
+    "colour": 2997,
+    "mono": 3815
    },
    "module": "MANDELBR.AD",
    "page": "mandelbrot.html",
@@ -270,8 +281,8 @@
   "marbles": {
    "about": "The 1992 original: marbles through a field of pins.",
    "bytes": {
-    "colour": 9890,
-    "mono": 9355
+    "colour": 9878,
+    "mono": 9354
    },
    "module": "MARBLES2.AD",
    "page": "marbles.html",
@@ -281,9 +292,9 @@
   "messages": {
    "about": "A line of text floating about: OUT TO LUNCH.",
    "bytes": {
-    "colour": 25287,
-    "mono": 25902,
-    "text": 2308
+    "colour": 25279,
+    "mono": 25901,
+    "text": 2307
    },
    "module": "MESSAGE3.AD",
    "page": "messages-ad.html",
@@ -293,8 +304,8 @@
   "mountains": {
    "about": "Fractal landscapes of the nine planets.",
    "bytes": {
-    "colour": 6088,
-    "mono": 7504
+    "colour": 6076,
+    "mono": 7505
    },
    "module": "MOUNTAIN.AD",
    "page": "mountains.html",
@@ -304,9 +315,9 @@
   "mowin": {
    "about": "The lawn grows over the screen, then he mows it.",
    "bytes": {
-    "colour": 34687,
-    "mono": 20920,
-    "text": 2604
+    "colour": 34675,
+    "mono": 20935,
+    "text": 2605
    },
    "module": "MOWIN.AD",
    "page": "mowin.html",
@@ -316,9 +327,9 @@
   "nocturne": {
    "about": "Eyes in the dark, blinking.",
    "bytes": {
-    "colour": 4765,
-    "mono": 5504,
-    "text": 2508
+    "colour": 4753,
+    "mono": 5507,
+    "text": 2519
    },
    "module": "NOCTURNE.AD",
    "page": "nocturne.html",
@@ -328,9 +339,9 @@
   "nonsense": {
    "about": "Sentences, grammatical and meaningless.",
    "bytes": {
-    "colour": 31499,
-    "mono": 32022,
-    "text": 12315
+    "colour": 31491,
+    "mono": 32031,
+    "text": 12316
    },
    "module": "NONSENSE.AD",
    "page": "nonsense.html",
@@ -340,20 +351,67 @@
   "photon": {
    "about": "Bursts of particles.",
    "bytes": {
-    "colour": 3359,
-    "mono": 4498,
-    "text": 4436
+    "colour": 3355,
+    "mono": 4497,
+    "text": 4435
    },
    "module": "PHOTON.AD",
    "page": "photon.html",
    "text": true,
    "title": "Photon"
   },
+  "pioneer": {
+   "about": "The dolphin clips from Pioneer's OEL car stereos, as recorded. Opt in: big.",
+   "bytes": {
+    "colour": 404777,
+    "mono": 404987
+   },
+   "extra": true,
+   "option": {
+    "choices": {
+     "diver": "Diver",
+     "dolphins": "Dolphins"
+    },
+    "default": {
+     "colour": [
+      "dolphins",
+      "diver"
+     ],
+     "mono": [
+      "dolphins",
+      "diver"
+     ]
+    },
+    "key": "clips",
+    "label": "Clips",
+    "many": true
+   },
+   "options": {
+    "clips": {
+     "each": {
+      "diver": {
+       "colour": 157356,
+       "mono": 157358
+      },
+      "dolphins": {
+       "colour": 245772,
+       "mono": 245774
+      }
+     },
+     "none": {
+      "colour": 1539,
+      "mono": 1763
+     }
+    }
+   },
+   "text": false,
+   "title": "Pioneer"
+  },
   "rebound": {
    "about": "Balls bouncing off each other.",
    "bytes": {
-    "colour": 4958,
-    "mono": 4881
+    "colour": 4954,
+    "mono": 4884
    },
    "module": "REBOUND.AD",
    "page": "rebound.html",
@@ -363,8 +421,8 @@
   "rose": {
    "about": "Two wheels turning, drawing petals in dots.",
    "bytes": {
-    "colour": 1929,
-    "mono": 2252
+    "colour": 1917,
+    "mono": 2253
    },
    "module": "ROSE.AD",
    "page": "rose.html",
@@ -374,8 +432,8 @@
   "shapes": {
    "about": "Rectangles and ellipses piling up.",
    "bytes": {
-    "colour": 1752,
-    "mono": 2029
+    "colour": 1749,
+    "mono": 2028
    },
    "module": "SHAPES.AD",
    "page": "shapes.html",
@@ -385,8 +443,8 @@
   "snake": {
    "about": "A snake solving a maze.",
    "bytes": {
-    "colour": 4026,
-    "mono": 4540
+    "colour": 4014,
+    "mono": 4541
    },
    "module": "SNAKE.AD",
    "page": "snake.html",
@@ -396,8 +454,8 @@
   "spheres": {
    "about": "Shaded spheres stacking up.",
    "bytes": {
-    "colour": 1757,
-    "mono": 2076
+    "colour": 1753,
+    "mono": 2079
    },
    "module": "SPHERES.AD",
    "page": "spheres.html",
@@ -407,8 +465,8 @@
   "spiral": {
    "about": "A ribbon of lines mirrored four ways.",
    "bytes": {
-    "colour": 1963,
-    "mono": 2281
+    "colour": 1960,
+    "mono": 2283
    },
    "module": "SPIRAL.AD",
    "page": "spiral.html",
@@ -418,9 +476,9 @@
   "starry_night": {
    "about": "A city at night, windows lighting up.",
    "bytes": {
-    "colour": 5608,
-    "mono": 6874,
-    "text": 2066
+    "colour": 5596,
+    "mono": 6885,
+    "text": 2065
    },
    "module": "STARRYNI.AD",
    "page": "starry-night.html",
@@ -430,8 +488,8 @@
   "strange": {
    "about": "Chaos plotted a point at a time.",
    "bytes": {
-    "colour": 2664,
-    "mono": 3286
+    "colour": 2656,
+    "mono": 3285
    },
    "module": "STRANGE.AD",
    "page": "strange.html",
@@ -441,8 +499,8 @@
   "string_theory": {
    "about": "Moir\u00e9 strung from edge to edge.",
    "bytes": {
-    "colour": 1703,
-    "mono": 1930
+    "colour": 1695,
+    "mono": 1935
    },
    "module": "STRING.AD",
    "page": "string.html",
@@ -452,9 +510,9 @@
   "toasters": {
    "about": "The squadron, on TOAST3's own art.",
    "bytes": {
-    "colour": 106832,
-    "mono": 56753,
-    "text": 2476
+    "colour": 106824,
+    "mono": 56752,
+    "text": 2477
    },
    "module": "TOAST3.AD",
    "page": "toasters.html",
@@ -464,9 +522,9 @@
   "toilets": {
    "about": "Toilets, rolls and plungers on the wing.",
    "bytes": {
-    "colour": 33188,
-    "mono": 20795,
-    "text": 2294
+    "colour": 33180,
+    "mono": 20794,
+    "text": 2293
    },
    "module": "TOILETS.AD",
    "page": "toilets.html",
@@ -476,9 +534,9 @@
   "warp": {
    "about": "Flying through the stars.",
    "bytes": {
-    "colour": 2545,
-    "mono": 3803,
-    "text": 3737
+    "colour": 2540,
+    "mono": 3802,
+    "text": 3736
    },
    "module": "WARP.AD",
    "page": "warp-ad.html",
@@ -488,9 +546,9 @@
   "zot": {
    "about": "Forked lightning.",
    "bytes": {
-    "colour": 3023,
-    "mono": 4364,
-    "text": 4296
+    "colour": 3007,
+    "mono": 4371,
+    "text": 4301
    },
    "module": "ZOT.AD",
    "page": "zot.html",

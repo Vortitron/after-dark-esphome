@@ -3,7 +3,7 @@
     after_dark:
       display_id: screen         # a pixel display, colour or 1-bit
       # lcd_id: lcd              # or a character LCD (lcd_pcf8574, lcd_gpio)
-      savers:                    # what to compile in (default: all)
+      savers:                    # what to compile in (default: all but pioneer)
         - toasters
         - fishpro:               # some take options, fixed at build time so
             species: [emperor, sardines]   # only what they need goes in
@@ -20,6 +20,8 @@ Saver options (see SAVER_OPTIONS):
   clocks:  face - melting_digital, classic, modern, art_deco or mutating.
            Default: mutating (ten photographs, 189 KB) on colour,
            melting_digital on a 1-bit panel.
+  pioneer: clips - dolphins (240 KB) and/or diver (154 KB), the clips from
+           Pioneer's OEL car stereos. Default: both.
   dosshell: commands - typed instead of DIR and the rest, each answered with
            a line per Home Assistant entity (needs `api:`):
              - dosshell:
@@ -82,6 +84,7 @@ CONF_AFTER_DARK_ID = "after_dark_id"
 CONF_MODE = "mode"
 CONF_OVERLAY = "overlay"
 CLOCKS_FACES = ["melting_digital", "classic", "modern", "art_deco", "mutating"]
+PIONEER_CLIPS = ["dolphins", "diver"]
 FISH_SPECIES = [
     "yellow_tang", "red_clown", "blue_tanger", "trigger_fish", "pink_squirrel",
     "butterfly_fish", "emperor", "jellyfish", "sardines",
@@ -103,6 +106,9 @@ def _find_savers():
 
 
 SAVERS = _find_savers()
+# Left out unless asked for: the Pioneer clips are 400 KB, which an
+# everything build has no room for.
+DEFAULT_SAVERS = [s for s in SAVERS if s != "pioneer"]
 
 after_dark_ns = cg.esphome_ns.namespace("after_dark")
 AfterDarkComponent = after_dark_ns.class_("AfterDarkComponent", cg.Component)
@@ -141,6 +147,13 @@ SAVER_OPTIONS = {
         }
     ),
     "clocks": cv.Schema({cv.Optional("face"): cv.one_of(*CLOCKS_FACES, lower=True, space="_")}),
+    "pioneer": cv.Schema(
+        {
+            cv.Optional("clips"): cv.All(
+                cv.ensure_list(cv.one_of(*PIONEER_CLIPS, lower=True)), cv.Length(min=1)
+            ),
+        }
+    ),
     "dosshell": cv.Schema(
         {
             cv.Optional("commands"): cv.All(
@@ -228,7 +241,7 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(): cv.declare_id(AfterDarkComponent),
             cv.Exclusive(CONF_DISPLAY_ID, "screen"): cv.use_id(display.Display),
             cv.Exclusive(CONF_LCD_ID, "screen"): cv.use_id(LCDDisplay),
-            cv.Optional(CONF_SAVERS, default=list(SAVERS)): _savers,
+            cv.Optional(CONF_SAVERS, default=DEFAULT_SAVERS): _savers,
             cv.Optional(CONF_SAVER): cv.one_of(*SAVERS, "off", "random", lower=True),
             cv.Optional(CONF_MODE, default="always"): cv.one_of("always", "screensaver", lower=True),
             cv.Optional(CONF_OVERLAY): cv.returning_lambda,
@@ -374,6 +387,10 @@ async def to_code(config):
                 cg.add_build_flag(f"-DAD_FISHPRO_{fish.upper()}")
         elif saver == "clocks" and "face" in options:
             cg.add_build_flag(f"-DAD_CLOCKS_TYPE={CLOCKS_FACES.index(options['face'])}")
+        elif saver == "pioneer" and "clips" in options:
+            cg.add_build_flag("-DAD_PIONEER_PICKED")
+            for clip in options["clips"]:
+                cg.add_build_flag(f"-DAD_PIONEER_{clip.upper()}")
         elif saver == "dosshell":
             if options.get("commands"):
                 cg.add_build_flag("-DAD_SHELL_LIVE")

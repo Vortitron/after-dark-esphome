@@ -7,6 +7,8 @@
 # oled/<saver>.gif   128x64 1-bit, 15 s at 20 fps, at its own size (the page
 #                    scales it up with crisp pixels)
 # lcd/<saver>.gif    a blue 1602, 12 s at 8 fps, for the savers that have one
+# colour/<saver>.gif 320x240, 20 s at 20 fps, for the extras, which have no
+#                    After Dark page for the builder to show instead
 #
 # The clock is fixed (AD_TIME) and so is the seed, so a rerun only changes the
 # files whose saver changed.
@@ -18,7 +20,8 @@ make -s -C "$root/host"
 render="$root/host/render"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-mkdir -p "$out/oled" "$out/lcd"
+mkdir -p "$out/oled" "$out/lcd" "$out/colour"
+extras=$(python3 -c "import json; print(' '.join(k for k, v in json.load(open('$here/savers.json')).items() if v.get('extra')))")
 export AD_TIME=1793000000
 for saver in $("$render" 2>&1 | sed -n 's/^savers://p'); do
   rm -f "$tmp"/*.ppm
@@ -32,6 +35,13 @@ for saver in $("$render" 2>&1 | sed -n 's/^savers://p'); do
       -vf "split[a][b];[a]palettegen=max_colors=8:reserve_transparent=0[p];[b][p]paletteuse=dither=none" \
       "$out/lcd/$saver.gif"
   fi
+  case " $extras " in *" $saver "*)
+    rm -f "$tmp"/*.ppm
+    "$render" "$saver" 320x240 400 "$tmp" 20 6 > /dev/null
+    ffmpeg -loglevel error -y -framerate 20 -i "$tmp/%04d.ppm" \
+      -vf "split[a][b];[a]palettegen=max_colors=16:reserve_transparent=0[p];[b][p]paletteuse=dither=none" \
+      "$out/colour/$saver.gif"
+  esac
   echo "$saver"
 done
 du -sh "$out"

@@ -22,7 +22,7 @@ esp32:
     type: esp-idf
 
 external_components:
-  - source: github://Vortitron/after-dark-esphome@v1.0.0
+  - source: github://Vortitron/after-dark-esphome@v1.1.0
     components: [after_dark]
   # Or from a checkout of this repository:
   # - source:
