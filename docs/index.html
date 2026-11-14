@@ -530,13 +530,13 @@
     }
 
     /* Each module's screen shows the saver as the chosen display draws it: a
-       still at rest, playing while the pointer or focus is on it. */
-    var calm = window.matchMedia('(prefers-reduced-motion: reduce)');
+       still at rest, playing while the pointer or focus is on it (asked for,
+       so even with reduced motion). */
     function thumbSrc(name, moving) {
       var k = kind();
       if (k === 'text' && !data.savers[name].text) k = 'mono';
       var dir = k === 'text' ? 'lcd/' : k === 'mono' ? 'oled/' : 'thumb/';
-      return 'previews/' + dir + name + (moving && !calm.matches ? '.gif' : '.png');
+      return 'previews/' + dir + name + (moving ? '.gif' : '.png');
     }
     function playThumb(mod, moving) {
       var img = mod.querySelector('.thumb img'), src = thumbSrc(mod.dataset.name, moving);
