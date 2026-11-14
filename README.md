@@ -12,7 +12,7 @@ component to a config yourself:
 
 ```yaml
 external_components:
-  - source: github://Vortitron/after-dark-esphome@v1.1.0
+  - source: github://Vortitron/after-dark-esphome@v1.2.0
     components: [after_dark]
 ```
 
@@ -59,19 +59,16 @@ a change.
 | `warp` | Warp! | ✓ (outward) |
 | `zot` | Zot! | ✓ |
 
-Two extras, from outside After Dark, in the spirit of the cyan organic-EL
-car stereos of the early 2000s and their famous dolphins:
+One extra, from outside After Dark, in the spirit of the cyan organic-EL car
+stereos of the early 2000s and their famous dolphins:
 
 | Saver | What | Character LCD |
 |---|---|---|
 | `dolphins` | An original saver, drawn in code: a pod leaping at sea (by moonlight, or in silhouette at dawn) and swimming the deep among kelp and light shafts, dithered to a dot matrix like the stereo's panel | ✓ hand-drawn |
-| `pioneer` | The dolphin clips from Pioneer's own stereos, as recorded; pick the `clips`. 400 KB, so only built in when listed | |
 
-The Pioneer clips are Pioneer's: 60 frames of 256×64 underwater dolphins
-(`movie8_f.lkd`) and 149 frames of 128×33 diver and dolphins
-(`alt_diverdolphins.lkd`), from the files the stereos' OEL Screen Saver Studio
-loaded. [carozerra](https://github.com/youxufkhan/carozerra) worked out the
-`.lkd` format and keeps the clips; `tools/lkd2c.py` converts them.
+The stereos' own clips, dolphins and all, are a sister project:
+[OEL for ESPHome](https://github.com/Vortitron/oel-esphome)
+([builder](https://vortitron.github.io/oel-esphome/)).
 
 Each kind of screen gets the saver a different way:
 
@@ -107,7 +104,7 @@ display:
 
 after_dark:
   display_id: screen            # or lcd_id: for a character LCD
-  savers:                       # compiled in (default: all but pioneer)
+  savers:                       # compiled in; "all" for every one
     - toasters
     - warp
     - fishpro:                  # some savers take options under their name
@@ -122,6 +119,11 @@ select:
   - platform: after_dark        # pick the saver from Home Assistant
     name: Screensaver
 ```
+
+Without `savers:`, a build gets a handful that suit every kind of screen,
+character LCDs included: `toasters`, `warp`, `flocks`, `starry_night` and
+`dolphins`. `savers: all` builds every one (on a colour panel that is most of
+a 4 MB board); `all` can also sit in a list beside savers given options.
 
 The display must not have a `lambda` or `pages`, or the two will fight over
 the screen. For a character LCD, use `lcd_id:` instead of `display_id:`; its
@@ -139,10 +141,6 @@ goes in:
   `mutating` (the module's default: ten photographs, 189 KB). On a 1-bit
   panel the default is `melting_digital`, as the photographs don't read as a
   clock at a third size.
-- `pioneer: clips:` `dolphins` (240 KB) and/or `diver` (154 KB). Default:
-  both. Each plays as the stereo did, at 60 ms a frame, scaled to the screen's
-  width; on a 128×64 OLED the 256-wide clip is shown dot for dot and pans
-  across, as halving it loses the dither the picture is made of.
 - `dosshell: commands:` Home Assistant data, typed as DOS commands. Each
   command is answered with a line an entity: its label on the left (the
   friendly name unless you give one) and its state on the right with its
@@ -288,12 +286,12 @@ On a 4 MB board with OTA:
 
 | Build (ESPHome 2025.7, ESP-IDF, Wi-Fi + API + OTA + SNTP) | Savers | Flash used of the 1.8 MB OTA slot |
 |---|---|---|
-| ESP32-C3 + SH1106 OLED ([example](examples/after-dark-c3-oled.yaml)) | all 31 | 1.39 MB (76%) |
+| ESP32-C3 + SH1106 OLED ([example](examples/after-dark-c3-oled.yaml)) | `all` (31 then) | 1.39 MB (76%) |
 | ESP32-C3 + 1602 LCD ([example](examples/after-dark-c3-lcd.yaml)) | the 17 with LCD versions | 1.03 MB (56%) |
-| ESP32-S3 + ILI9341 ([example](examples/after-dark-s3.yaml)) | all 31 | 1.75 MB (95%) |
+| ESP32-S3 + ILI9341 ([example](examples/after-dark-s3.yaml)) | `all` (31 then) | 1.75 MB (95%) |
 | ESP32-S3 + ILI9341 | `toasters`, `warp` (no SNTP) | 0.99 MB (54%) |
 
-So a colour build of everything only just fits; list `savers:` to leave room
+So a colour build of everything (`savers: all`) only just fits; list `savers:` to leave room
 for anything else on the board, or use one with 8 MB of flash. The biggest
 colour sets are Clocks' mutating photographs (189 KB; the classic face is
 32 KB), Fish Pro (80 KB of scenery plus its species), Bugs (135 KB), the
@@ -317,10 +315,11 @@ compilers (`docs/savers.json`) and errs a few per cent high.
   frames as run-length rows; `--scale`/`--mono` for small screens, `--cells`
   for 3.x strips, `--index` for a trimmed index from `tools/index/`).
   `font2c.py` makes the fonts, `words2c.py` Nonsense's grammar and
-  `einstein2c.py` Einstein's chalk, `lkd2c.py` Pioneer's clips. `measure.py` writes the builder's sizes
+  `einstein2c.py` Einstein's chalk. `measure.py` writes the builder's sizes
   (`savers.json` beside it holds each saver's name, page and note), and
-  `previews.sh` renders its previews into `docs/previews/` (and, for the
-  extras, which have no After Dark page to show, colour ones too).
+  `previews.sh` renders its previews into `docs/previews/`: a GIF for each
+  saver on each kind of screen (colour ones only for the extras, which have
+  no After Dark page to show), and a still of each for the builder's modules.
 - `docs/`: the builder (GitHub Pages), its size table and previews.
 - `examples/`: whole configs for each kind of screen.
 - `host/`: renders a saver on the desktop, so a port can be checked frame by

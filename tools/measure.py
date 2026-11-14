@@ -9,8 +9,7 @@ For each saver and each kind of screen it compiles the saver as ESPHome
 would (S3 Xtensa for colour, C3 RISC-V for 1-bit and character LCD, -Os,
 one section per function), links it against the shared core with unused
 code thrown away, and subtracts the core alone. Options that change what goes
-in (Fish Pro's species, Clocks' face, Pioneer's clips) are measured one
-choice at a time.
+in (Fish Pro's species, Clocks' face) are measured one choice at a time.
 
 The numbers are what the saver costs on top of a firmware; the base firmware
 itself (ESPHome, Wi-Fi, the display driver...) is measured from real builds
@@ -53,7 +52,6 @@ FISH = [(3010, 'yellow_tang'), (3020, 'red_clown'), (3030, 'blue_tanger'), (3040
         (3050, 'pink_squirrel'), (3070, 'butterfly_fish'), (3080, 'emperor'), (3060, 'jellyfish'),
         (3110, 'sardines')]
 FACES = ['melting_digital', 'classic', 'modern', 'art_deco', 'mutating']
-CLIPS = ['dolphins', 'diver']
 
 STUB = '#include "ad_core.h"\nextern "C" void ad_stub_entry() { volatile const void *p = adcore::first_saver(); (void) p; }\n'
 
@@ -126,12 +124,6 @@ def main():
                 for kind in ('colour', 'mono'):
                     jobs[('clocks', kind, face)] = pool.submit(
                         cost, kind, 'clocks', ['AD_CLOCKS_TYPE=%d' % i], '-' + face)
-            # Pioneer: no clips, then each alone (one set of art serves both kinds).
-            for kind in ('colour', 'mono'):
-                jobs[('pioneer', kind, 'none')] = pool.submit(cost, kind, 'pioneer', ['AD_PIONEER_PICKED'], '-none')
-                for clip in CLIPS:
-                    jobs[('pioneer', kind, clip)] = pool.submit(
-                        cost, kind, 'pioneer', ['AD_PIONEER_PICKED', 'AD_PIONEER_' + clip.upper()], '-' + clip)
             results = {k: v.result() for k, v in jobs.items()}
 
     meta = json.load(open(os.path.join(HERE, 'savers.json')))
@@ -150,12 +142,6 @@ def main():
         'none': {k: results[('fishpro', k, 'none')] for k in ('colour', 'mono')},
         'each': {fish: {'colour': results[('fishpro', 'colour', fish)] - results[('fishpro', 'colour', 'none')],
                         'mono': 0} for _, fish in FISH},
-    }}
-    pi = report['savers']['pioneer']
-    pi['options'] = {'clips': {
-        'none': {k: results[('pioneer', k, 'none')] for k in ('colour', 'mono')},
-        'each': {clip: {k: results[('pioneer', k, clip)] - results[('pioneer', k, 'none')] for k in ('colour', 'mono')}
-                 for clip in CLIPS},
     }}
     ck = report['savers']['clocks']
     ck['options'] = {'face': {face: {k: results[('clocks', k, face)] for k in ('colour', 'mono')} for face in FACES}}

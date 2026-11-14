@@ -132,9 +132,9 @@
       box-shadow: inset 0 1px 3px rgba(0, 0, 0, .25);
     }
     .mod {
-      position: relative; display: grid; grid-template-rows: auto auto 1fr auto auto; gap: 6px;
+      position: relative; display: grid; grid-template-rows: auto auto auto 1fr auto auto; gap: 6px;
       background: var(--module); border: 1px solid var(--module-edge); border-radius: 4px;
-      padding: 8px 8px 9px; min-height: 196px;
+      padding: 8px 8px 9px; min-height: 262px;
       box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(0, 0, 0, .18);
     }
     /* The DIN rail showing either side of each module's foot. */
@@ -146,6 +146,13 @@
     .mod .code { font: 600 10px var(--mono); color: var(--ink-2); letter-spacing: .06em; }
     .led { width: 11px; height: 11px; border-radius: 50%; background: var(--led-off); box-shadow: inset 0 0 0 1px #000; }
     .mod.on .led { background: var(--green); box-shadow: 0 0 7px var(--green), inset 0 0 0 1px #0a6b2e; }
+    /* The module's own little screen: a still, which plays on hover or focus. */
+    .mod .thumb {
+      display: grid; place-items: center; height: 64px; padding: 3px; border: 0; border-radius: 2px;
+      background: #000; box-shadow: inset 0 0 0 1px #000, inset 0 0 6px rgba(0, 0, 0, .8); cursor: zoom-in;
+    }
+    .mod .thumb img { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+    .mod.na .thumb img { opacity: .25; }
     .mod .plate { background: var(--label); border: 1px solid var(--module-edge); border-radius: 2px; padding: 5px 6px; cursor: pointer; min-width: 0; }
     .mod .plate b { display: block; font: 700 14px/1.15 var(--sans); }
     .mod .plate small { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; line-height: 1.3; color: var(--ink-2); margin-top: 3px; }
@@ -290,7 +297,7 @@
         <p>Put the After Dark screen savers on an ESP32 with a little screen, and pick one from Home Assistant. Switch on the modules you want, check they fit the flash, and copy the program into ESPHome. Only the modules you switch on go into the firmware.</p>
       </div>
       <div>
-        <div class="spec">MODEL <b>AD-ESP</b> · REV <b id="rev">v1.1.0</b><br>MODULES <b id="count">—</b> · BUS <b>I²C / SPI</b></div>
+        <div class="spec">MODEL <b>AD-ESP</b> · REV <b id="rev">v1.2.0</b><br>MODULES <b id="count">—</b> · BUS <b>I²C / SPI</b></div>
         <div class="lamps"><span class="lamp run"><i></i>RUN</span><span class="lamp fault" id="fault"><i></i>FLASH FULL</span></div>
       </div>
     </section>
@@ -339,7 +346,8 @@
         <button class="btn small" id="all" type="button">All on</button>
         <button class="btn small" id="none" type="button">All off</button>
       </header>
-      <p class="hint">Each AD module is ported from its page on the <a href="https://vortitron.github.io/after-dark/">After Dark site</a>. On a 1-bit OLED its art is shrunk and redrawn in black and white; on a character LCD it is drawn with the panel's eight custom characters. The EX modules are extras from outside After Dark: Dolphins, drawn for this in the style of the cyan OEL car stereos, and Pioneer, the stereos' own dolphin clips (400 KB, so it is left out of a config that doesn't list it). Hatched modules have no version for this display.</p>
+      <p class="hint">Each AD module is ported from its page on the <a href="https://vortitron.github.io/after-dark/">After Dark site</a>. On a 1-bit OLED its art is shrunk and redrawn in black and white; on a character LCD it is drawn with the panel's eight custom characters. The EX module is an extra from outside After Dark: Dolphins, drawn for this in the style of the cyan OEL car stereos. Point at a module's screen to see it run on the display you chose. Hatched modules have no version for this display.</p>
+      <p class="hint">For the stereos' own clips (the dolphins, the colour movies, the level meters) see the sister project, <a href="https://vortitron.github.io/oel-esphome/">OEL for ESPHome</a>.</p>
       <div class="rail" id="list" aria-label="Screen savers"></div>
       <div class="bar">
         <label for="start">Start with</label>
@@ -388,6 +396,7 @@
     <footer>
       <a href="https://vortitron.github.io/after-dark/">&larr; The screen savers on the web</a>
       <span>Sizes measured with ESPHome 2025.7.5 (ESP-IDF); expect a few KB either way.</span>
+      <a href="https://vortitron.github.io/oel-esphome/">Pioneer's OEL clips &rarr;</a>
       <a href="https://github.com/Vortitron/after-dark-esphome">Source and README</a>
     </footer>
   </main>
@@ -418,7 +427,7 @@
     'use strict';
 
     /* The component's release that configs pin, and where the web versions are. */
-    var VERSION = 'v1.1.0';
+    var VERSION = 'v1.2.0';
     var SITE = 'https://vortitron.github.io/after-dark/';
 
     /* The screens: which kind of saver they get, and their ESPHome block. */
@@ -480,11 +489,6 @@
         return n;
       }
       if (name === 'clocks') return s.options.face[option.clocks || defaultOption('clocks')][k];
-      if (name === 'pioneer') {
-        var cl = s.options.clips, m = cl.none[k];
-        (option.pioneer || defaultOption('pioneer')).forEach(function (c) { m += cl.each[c][k]; });
-        return m;
-      }
       return s.bytes[k];
     }
 
@@ -503,6 +507,7 @@
         mod.innerHTML =
           '<div class="terms" aria-hidden="true"></div>' +
           '<div class="top"><span class="code">' + series + '-' + String(++counts[series]).padStart(2, '0') + '</span><span class="led" aria-hidden="true"></span></div>' +
+          '<button class="thumb" type="button"><img alt="" loading="lazy"></button>' +
           '<label class="plate" for="' + id + '"><b></b><small></small></label>' +
           '<div class="readout"></div>' +
           '<div class="ctl"><span class="sw"><input type="checkbox" id="' + id + '"><i aria-hidden="true"></i></span>' +
@@ -511,12 +516,31 @@
         mod.querySelector('.look').setAttribute('aria-label', 'Preview ' + s.title);
         list.appendChild(mod);
         mod.querySelector('.look').addEventListener('click', function () { openPreview(name); });
+        var thumb = mod.querySelector('.thumb');
+        thumb.setAttribute('aria-label', 'Preview ' + s.title);
+        thumb.addEventListener('click', function () { openPreview(name); });
+        ['mouseenter', 'focus'].forEach(function (e) { thumb.addEventListener(e, function () { playThumb(mod, true); }); });
+        ['mouseleave', 'blur'].forEach(function (e) { thumb.addEventListener(e, function () { playThumb(mod, false); }); });
         mod.querySelector('input').addEventListener('change', function (e) {
           chosen[name] = e.target.checked;
           update();
         });
       });
       $('count').textContent = Object.keys(data.savers).length;
+    }
+
+    /* Each module's screen shows the saver as the chosen display draws it: a
+       still at rest, playing while the pointer or focus is on it. */
+    var calm = window.matchMedia('(prefers-reduced-motion: reduce)');
+    function thumbSrc(name, moving) {
+      var k = kind();
+      if (k === 'text' && !data.savers[name].text) k = 'mono';
+      var dir = k === 'text' ? 'lcd/' : k === 'mono' ? 'oled/' : 'thumb/';
+      return 'previews/' + dir + name + (moving && !calm.matches ? '.gif' : '.png');
+    }
+    function playThumb(mod, moving) {
+      var img = mod.querySelector('.thumb img'), src = thumbSrc(mod.dataset.name, moving);
+      if (img.getAttribute('src') !== src) img.src = src;
     }
 
     /* A saver's options, in the parameters panel while it is switched on. */
@@ -570,7 +594,6 @@
           var size = '';
           if (name === 'fishpro' && k === 'colour') size = kb(s.options.species.each[key].colour);
           if (name === 'clocks') size = kb(s.options.face[key][k]);
-          if (name === 'pioneer') size = kb(s.options.clips.each[key][k]);
           if (size) { var z = document.createElement('small'); z.textContent = size; face.appendChild(z); }
           input.addEventListener('change', function () {
             if (o.many) {
@@ -624,6 +647,7 @@
         mod.querySelector('small').textContent = ok ? s.about : 'No character LCD version.';
         mod.querySelector('.plate').title = s.about;
         mod.querySelector('.readout').textContent = ok ? kb(cost(name)) : 'N/A';
+        playThumb(mod, false);
       });
       buildParams();
 

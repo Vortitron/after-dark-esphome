@@ -360,53 +360,6 @@
    "text": true,
    "title": "Photon"
   },
-  "pioneer": {
-   "about": "The dolphin clips from Pioneer's OEL car stereos, as recorded. Opt in: big.",
-   "bytes": {
-    "colour": 404777,
-    "mono": 404987
-   },
-   "extra": true,
-   "option": {
-    "choices": {
-     "diver": "Diver",
-     "dolphins": "Dolphins"
-    },
-    "default": {
-     "colour": [
-      "dolphins",
-      "diver"
-     ],
-     "mono": [
-      "dolphins",
-      "diver"
-     ]
-    },
-    "key": "clips",
-    "label": "Clips",
-    "many": true
-   },
-   "options": {
-    "clips": {
-     "each": {
-      "diver": {
-       "colour": 157356,
-       "mono": 157358
-      },
-      "dolphins": {
-       "colour": 245772,
-       "mono": 245774
-      }
-     },
-     "none": {
-      "colour": 1539,
-      "mono": 1763
-     }
-    }
-   },
-   "text": false,
-   "title": "Pioneer"
-  },
   "rebound": {
    "about": "Balls bouncing off each other.",
    "bytes": {

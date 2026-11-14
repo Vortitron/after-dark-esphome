@@ -165,30 +165,6 @@
   "page": "photon.html",
   "about": "Bursts of particles."
  },
- "pioneer": {
-  "title": "Pioneer",
-  "extra": true,
-  "about": "The dolphin clips from Pioneer's OEL car stereos, as recorded. Opt in: big.",
-  "option": {
-   "key": "clips",
-   "label": "Clips",
-   "many": true,
-   "choices": {
-    "dolphins": "Dolphins",
-    "diver": "Diver"
-   },
-   "default": {
-    "colour": [
-     "dolphins",
-     "diver"
-    ],
-    "mono": [
-     "dolphins",
-     "diver"
-    ]
-   }
-  }
- },
  "rebound": {
   "title": "Rebound",
   "module": "REBOUND.AD",

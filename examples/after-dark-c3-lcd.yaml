@@ -22,7 +22,7 @@ esp32:
     type: esp-idf
 
 external_components:
-  - source: github://Vortitron/after-dark-esphome@v1.1.0
+  - source: github://Vortitron/after-dark-esphome@v1.2.0
     components: [after_dark]
   # Or from a checkout of this repository:
   # - source:
@@ -60,6 +60,7 @@ display:
 after_dark:
   lcd_id: lcd
   time_id: sntp_time
+  savers: all          # or a list; with none, a handful that suits any screen
   saver: toasters
 
 select:

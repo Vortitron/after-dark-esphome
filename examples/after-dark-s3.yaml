@@ -20,7 +20,7 @@ psram:
   mode: quad
 
 external_components:
-  - source: github://Vortitron/after-dark-esphome@v1.1.0
+  - source: github://Vortitron/after-dark-esphome@v1.2.0
     components: [after_dark]
   # Or from a checkout of this repository:
   # - source:
@@ -79,8 +79,10 @@ light:
 after_dark:
   display_id: screen
   time_id: sntp_time
-  # All 31 savers take 95% of a 4 MB board's app slot; list some to leave room:
-  # savers: [toasters, warp, fishpro, starry_night, messages]
+  # Every saver: about 96% of a 4 MB board's app slot. List some instead to
+  # leave room (savers: [toasters, warp, fishpro, starry_night, dolphins]),
+  # or leave savers: out for a handful that suits any screen.
+  savers: all
   saver: toasters
   fps: 30
 
