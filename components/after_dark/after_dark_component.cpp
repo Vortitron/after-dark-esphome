@@ -180,8 +180,52 @@ void AfterDarkComponent::blank_() {
   push_();
 }
 
+#ifdef AD_USE_LCD
+/* A character LCD with frame-rate modulation: only the cells that differ
+   from what the panel shows go out, a run at a time, so a pass that just
+   blinks the dim cells costs a few bytes. */
+void AfterDarkComponent::push_text_modulated_() {
+  for (int g = 0; g < ::adcore::TextScreen::GLYPHS; g++) {
+    if (!text_.glyph_changed(g))
+      continue;
+    uint8_t bits[8];
+    memcpy(bits, text_.glyph_bits(g), 8);
+    lcd_->loadchar(g, bits);
+  }
+  if (!panel_ok_) {
+    memset(panel_, 0xFF, sizeof panel_);  // matches nothing: all of it goes
+    panel_ok_ = true;
+  }
+  auto send = LcdInternals::send_fn();
+  auto command = LcdInternals::command_fn();
+  const bool blank = text_phase_ & 1;
+  for (int r = 0; r < text_.rows(); r++) {
+    /* The HD44780's rows start at 0x00 and 0x40; a third and fourth carry
+       on from the end of the first two. */
+    const uint8_t base = (r & 1 ? 0x40 : 0x00) + (r >= 2 ? text_.cols() : 0);
+    for (int c = 0; c < text_.cols();) {
+      auto want = [&](int i) -> uint8_t { return blank && text_.dim(i, r) ? ' ' : text_.at(i, r); };
+      if (want(c) == panel_[r][c]) {
+        c++;
+        continue;
+      }
+      (lcd_->*command)(0x80 | (base + c));  // set the DDRAM address
+      for (; c < text_.cols() && want(c) != panel_[r][c]; c++) {
+        panel_[r][c] = want(c);
+        (lcd_->*send)(panel_[r][c], true);
+      }
+    }
+  }
+  text_.mark_sent();
+}
+#endif
+
 void AfterDarkComponent::push_() {
 #ifdef AD_USE_LCD
+  if (text_mode_() && subframes_ > 1) {
+    push_text_modulated_();
+    return;
+  }
   if (text_mode_()) {
     if (!text_.changed())
       return;
@@ -325,6 +369,16 @@ void AfterDarkComponent::loop() {
       push_();
       count_subframe_(now);
     }
+#ifdef AD_USE_LCD
+    /* A character LCD's dim cells, blank every other pass. Its crystal is
+       slow, so 100 passes a second is plenty. */
+    if (text_saver_ && subframes_ > 1 && !overlay_shown_ && now - sub_ms_ >= 10 && text_.any_dim()) {
+      sub_ms_ = now;
+      text_phase_ ^= 1;
+      push_();
+      count_subframe_(now);
+    }
+#endif
     return;
   }
   last_ms_ = sub_ms_ = now;
@@ -346,6 +400,7 @@ void AfterDarkComponent::loop() {
     std::vector<std::string> lines = overlay_();
     if (!lines.empty()) {
       if (!overlay_shown_ || lines != last_overlay_) {
+        panel_ok_ = false;  // written past what the passes keep track of
         for (int r = 0; r < lcd_rows_; r++) {
           std::string row = r < (int) lines.size() ? lines[r] : std::string();
           row.resize(lcd_cols_, ' ');
@@ -375,6 +430,11 @@ void AfterDarkComponent::set_frame_rate_modulation(int subframes) {
   /* The shades already drawn weren't kept, so the saver starts again. */
   if (saver_ && surface_.mono())
     run_(running_name_);
+#ifdef AD_USE_LCD
+  /* A character LCD: whichever way it now goes, send it all again. */
+  panel_ok_ = false;
+  text_.invalidate();
+#endif
 }
 
 /* How fast the subframes go out, in the log: below about 100 a second
@@ -398,6 +458,8 @@ void AfterDarkComponent::dump_config() {
                   surface_.mono() ? " (1-bit)" : "", fps_);
   if (surface_.mono())
     ESP_LOGCONFIG(TAG, "  Frame-rate modulation: %d subframe%s", subframes_, subframes_ == 1 ? " (off)" : "s");
+  if (text_mode_())
+    ESP_LOGCONFIG(TAG, "  Dim cells (frame-rate modulation): %s", subframes_ > 1 ? "on" : "off");
   ESP_LOGCONFIG(TAG, "  Saver: %s", current_.c_str());
   for (const auto &c : ::adcore::shell_commands)
     ESP_LOGCONFIG(TAG, "  DOS Shell command: %s (%u lines)", c.name.c_str(), (unsigned) c.lines.size());

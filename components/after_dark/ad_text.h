@@ -19,13 +19,18 @@ class TextScreen {
   int cols() const { return cols_; }
   int rows() const { return rows_; }
   void clear();
-  /* A ROM character code, or 0-7 for a defined glyph. Clipped. */
-  void put(int col, int row, uint8_t code);
+  /* A ROM character code, or 0-7 for a defined glyph. Clipped. A dim cell
+     is shown at half strength where the panel runs frame-rate modulation
+     (lit every other pass, which a slow liquid crystal averages), and as
+     any other where it doesn't. */
+  void put(int col, int row, uint8_t code, bool dim = false);
   /* Five bits a row (bit 4 is the left column), top row first. */
   void glyph(int slot, const uint8_t bits[8]);
 
   /* For whatever drives the panel. */
   uint8_t at(int col, int row) const { return chars_[row][col]; }
+  bool dim(int col, int row) const { return dim_[row][col]; }
+  bool any_dim() const;
   const uint8_t *glyph_bits(int slot) const { return glyphs_[slot]; }
   bool glyph_changed(int slot) const { return glyph_dirty_ & (1 << slot); }
   /* Since mark_sent(): savers may clear and redraw every frame. */
@@ -37,6 +42,7 @@ class TextScreen {
  private:
   int cols_ = 16, rows_ = 2;
   uint8_t chars_[MAX_ROWS][MAX_COLS];
+  bool dim_[MAX_ROWS][MAX_COLS];
   uint8_t sent_[MAX_ROWS][MAX_COLS];
   uint8_t glyphs_[GLYPHS][8];
   uint8_t glyph_dirty_ = 0xFF;

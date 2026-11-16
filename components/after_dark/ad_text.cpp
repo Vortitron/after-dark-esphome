@@ -13,7 +13,18 @@ void TextScreen::begin(int cols, int rows) {
   glyph_dirty_ = 0xFF;
 }
 
-void TextScreen::clear() { memset(chars_, ' ', sizeof chars_); }
+void TextScreen::clear() {
+  memset(chars_, ' ', sizeof chars_);
+  memset(dim_, 0, sizeof dim_);
+}
+
+bool TextScreen::any_dim() const {
+  for (int r = 0; r < rows_; r++)
+    for (int c = 0; c < cols_; c++)
+      if (dim_[r][c] && chars_[r][c] != ' ')
+        return true;
+  return false;
+}
 
 bool TextScreen::changed() const { return glyph_dirty_ || memcmp(chars_, sent_, sizeof chars_) != 0; }
 
@@ -24,10 +35,11 @@ void TextScreen::mark_sent() {
 
 void TextScreen::invalidate() { memset(sent_, 0, sizeof sent_); }
 
-void TextScreen::put(int col, int row, uint8_t code) {
+void TextScreen::put(int col, int row, uint8_t code, bool dim) {
   if (col < 0 || row < 0 || col >= cols_ || row >= rows_)
     return;
   chars_[row][col] = code;
+  dim_[row][col] = dim;
 }
 
 void TextScreen::glyph(int slot, const uint8_t bits[8]) {

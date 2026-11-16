@@ -182,6 +182,7 @@ class Shell {
     hold_until_ = -1;
     next_live_ = 0;
     text_.assign((rows_ + 1) * cols_, ' ');
+    dim_.assign((rows_ + 1) * cols_, 0);
     len_.assign(rows_ + 1, 0);
     keys_ = KEYS[speed];
     typo_ = TYPO[accuracy];
@@ -258,6 +259,8 @@ class Shell {
   int lines() const { return n_; }
   int length(int r) const { return len_[r]; }
   char at(int r, int c) const { return text_[r * cols_ + c]; }
+  /* Part of a prompt, which a character LCD can show dimmer. */
+  bool dim(int r, int c) const { return dim_[r * cols_ + c]; }
   /* The block cursor: 0.3 s on, 0.3 s off, on again at each key. */
   bool cursor_on() const { return fmodf((t_ - blink_) / 0.3f, 2) < 1; }
   /* Holding on an answer (compact): the block blinks in the bottom-right
@@ -394,6 +397,7 @@ class Shell {
   }
   void scroll() {
     memmove(&text_[0], &text_[cols_], (n_ - 1) * cols_);
+    memmove(&dim_[0], &dim_[cols_], (n_ - 1) * cols_);
     for (int i = 1; i < n_; i++)
       len_[i - 1] = len_[i];
     n_--;
@@ -416,6 +420,7 @@ class Shell {
         new_line();
       }
       int r = n_ - 1;
+      dim_[r * cols_ + len_[r]] = dim_out_;
       text_[r * cols_ + len_[r]++] = *t;
     }
   }
@@ -429,8 +434,10 @@ class Shell {
   }
   void set_last(const char *t) {
     int r = n_ - 1, i = 0;
-    for (; t[i] && i < cols_; i++)
+    for (; t[i] && i < cols_; i++) {
       text_[r * cols_ + i] = t[i];
+      dim_[r * cols_ + i] = 0;
+    }
     len_[r] = i;
   }
   void clear() {
@@ -566,7 +573,9 @@ class Shell {
       }
       i++;
     }
+    dim_out_ = true;
     write(buf);
+    dim_out_ = false;
   }
 
   /* What the shell says to a mistyped command; %s is the word typed. */
@@ -930,6 +939,8 @@ class Shell {
   float hold_until_ = -1;
   unsigned next_live_ = 0;
   std::vector<char> text_;
+  std::vector<uint8_t> dim_;  // prompt cells
+  bool dim_out_ = false;      // what write() is writing is prompt
   std::vector<uint8_t> len_;
   int n_ = 1;
   int cwd_ = 0;
@@ -1068,7 +1079,7 @@ class DosShellText : public TextSaver {
     int n = shell.lines();
     for (int r = 0; r < n && r < t.rows(); r++)
       for (int c = 0; c < shell.length(r); c++)
-        t.put(c, r, rom(shell.at(r, c)));
+        t.put(c, r, rom(shell.at(r, c)), shell.dim(r, c));
     if (shell.holding()) {
       if (shell.corner_on())
         t.put(t.cols() - 1, n - 1, BLOCK);

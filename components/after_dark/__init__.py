@@ -11,7 +11,8 @@
             face: classic
       saver: toasters            # what to start with, or "off"
       fps: 30                    # default 30, or 8 on a character LCD
-      frame_rate_modulation: false  # 1-bit panels: true (2 subframes) or 2-4
+      frame_rate_modulation: false  # 1-bit panels: true (2 subframes) or 2-4;
+                                    # character LCDs: dim cells (DOS Shell's prompt)
       time_id: sntp_time         # for the clocks (optional)
 
 Saver options (see SAVER_OPTIONS):
@@ -228,8 +229,6 @@ def _check(config):
     screensaver = config[CONF_MODE] == "screensaver"
     if screensaver and CONF_LCD_ID in config:
         raise cv.Invalid("screensaver mode is for pixel displays (display_id)", [CONF_MODE])
-    if config[CONF_FRM] > 1 and CONF_LCD_ID in config:
-        raise cv.Invalid("frame_rate_modulation is for 1-bit pixel displays (display_id)", [CONF_FRM])
     if CONF_OVERLAY in config and CONF_LCD_ID not in config:
         raise cv.Invalid("overlay is for character LCDs (lcd_id)", [CONF_OVERLAY])
     if screensaver:

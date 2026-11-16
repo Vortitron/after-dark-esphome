@@ -43,6 +43,17 @@ struct DisplayInternals : display::Display {
   static auto auto_clear() { return &DisplayInternals::auto_clear_enabled_; }
 };
 
+#ifdef AD_USE_LCD
+/* The character LCD's own byte writers, protected too, reached the same way:
+   frame-rate modulation rewrites a few cells a pass, not the whole panel. */
+struct LcdInternals : lcd_base::LCDDisplay {
+  using Send = void (lcd_base::LCDDisplay::*)(uint8_t, bool);
+  using Command = void (lcd_base::LCDDisplay::*)(uint8_t);
+  static Send send_fn() { return &LcdInternals::send; }
+  static Command command_fn() { return &LcdInternals::command_; }
+};
+#endif
+
 class DisplaySurface : public ::adcore::Surface {
  public:
   void attach(display::Display *d) {
@@ -145,6 +156,14 @@ class AfterDarkComponent : public Component {
   std::string pick_random_();
   void blank_();
   void push_();
+#ifdef AD_USE_LCD
+  void push_text_modulated_();
+  /* What the panel shows, cell by cell, when frame-rate modulation writes
+     it; and which pass this is (dim cells blank on the odd ones). */
+  uint8_t panel_[::adcore::TextScreen::MAX_ROWS][::adcore::TextScreen::MAX_COLS];
+  bool panel_ok_{false};
+  uint8_t text_phase_{0};
+#endif
   void count_subframe_(uint32_t now);
 
   display::Display *display_{nullptr};

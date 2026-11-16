@@ -127,7 +127,8 @@ bool keep(int i, int frames) { return i % every == 0 || i == frames - 1; }
 
 /* A character LCD as a picture: 3x3 px dots on a 4 px pitch, a dot's gap
    between cells, white on blue. Custom glyphs come from the screen, the rest
-   from font5x8.h. */
+   from font5x8.h. With AD_FRM set, dim cells are drawn half way, as frame-rate
+   modulation shows them. */
 bool write_lcd(const TextScreen &t, const char *path) {
   const int D = 4, CW = 6 * D, CH = 9 * D, B = 12;
   int w = t.cols() * CW - D + 2 * B, h = t.rows() * CH - D + 2 * B;
@@ -141,15 +142,16 @@ bool write_lcd(const TextScreen &t, const char *path) {
     for (int c = 0; c < t.cols(); c++) {
       uint8_t code = t.at(c, r);
       const uint8_t *bits = code < 8 ? t.glyph_bits(code) : FONT5X8[code];
+      const bool half = getenv("AD_FRM") && atoi(getenv("AD_FRM")) > 1 && t.dim(c, r);
       for (int y = 0; y < 8; y++)
         for (int x = 0; x < 5; x++) {
           bool on = bits[y] & (0x10 >> x);
           for (int j = 0; j < D - 1; j++)
             for (int i = 0; i < D - 1; i++) {
               uint8_t *p = &rgb[((B + r * CH + y * D + j) * w + B + c * CW + x * D + i) * 3];
-              p[0] = on ? 235 : 32;
-              p[1] = on ? 240 : 72;
-              p[2] = on ? 255 : 230;
+              p[0] = on ? (half ? 134 : 235) : 32;
+              p[1] = on ? (half ? 156 : 240) : 72;
+              p[2] = on ? (half ? 242 : 255) : 230;
             }
         }
     }
