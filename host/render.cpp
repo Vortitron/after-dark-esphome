@@ -27,6 +27,10 @@
 
 using namespace adcore;
 
+namespace adcore {
+extern bool dolphins_clock;  // AD_DOLPHINS_CLOCK=1
+}
+
 class HostSurface : public Surface {
  public:
   HostSurface(int w, int h, bool mono) : w_(w), h_(h), mono_(mono), rgb_(w * h * 3, 0) { reset_dirty(); }
@@ -280,6 +284,7 @@ int main(int argc, char **argv) {
     else
       shell_demo();
   }
+  dolphins_clock = getenv("AD_DOLPHINS_CLOCK") != nullptr;
   if (getenv("AD_EVERY"))
     every = atoi(getenv("AD_EVERY")) > 0 ? atoi(getenv("AD_EVERY")) : 1;
   clock_start = getenv("AD_TIME") ? (time_t) atoll(getenv("AD_TIME")) : time(nullptr);

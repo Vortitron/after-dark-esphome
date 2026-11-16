@@ -18,9 +18,13 @@
 #include "ad_core.h"
 #include "ad_text.h"
 
+#include <cstdio>
 #include <cstring>
 
 namespace adcore {
+
+/* The time in the sky on a character LCD (the YAML's `clock: true`). */
+bool dolphins_clock = false;
 
 namespace {
 
@@ -863,11 +867,13 @@ class DolphinsText : public TextSaver {
     rows_ = t.rows();
     w_ = cols_ * 6 - 1;
     h_ = rows_ * 9 - 1;
-    /* The surface sits low in the bottom row; the moon high in the top. */
+    /* The surface sits low in the bottom row; the moon high in the top,
+       clear of the clock (HH:MM at the left) when there is one. */
     water_ = (rows_ - 1) * 9 + 4;
-    moon_ = 2 + rng.below(cols_ - 4);
+    sky0_ = dolphins_clock && cols_ >= 12 ? 6 : 0;
+    moon_ = sky0_ + 2 + rng.below(cols_ - sky0_ - 4);
     for (int i = 0; i < 3; i++) {
-      star_col_[i] = rng.below(cols_);
+      star_col_[i] = sky0_ + rng.below(cols_ - sky0_);
       star_phase_[i] = rng.range(0, 6.28f);
     }
     t_ = clock_ = 0;
@@ -911,6 +917,11 @@ class DolphinsText : public TextSaver {
     }
     if (splash_t_ > 0)
       splash_t_ -= step;
+
+    clock_text_[0] = 0;
+    Clock k;
+    if (sky0_ && local_time(k))
+      snprintf(clock_text_, sizeof clock_text_, "%02d:%02d", k.hour, k.minute);
 
     memset(px_, 0, sizeof px_);
     int roll = (int) (t_ * 5) % 5;
@@ -1012,6 +1023,11 @@ class DolphinsText : public TextSaver {
           continue;
         }
         if (blank) {
+          /* The time in the sky, where nothing is in front of it. */
+          if (r == 0 && c < 5 && clock_text_[0]) {
+            t.put(c, r, clock_text_[c]);
+            continue;
+          }
           bool faint;
           uint8_t s = star(c, r, faint);
           t.put(c, r, s, faint);
@@ -1045,7 +1061,8 @@ class DolphinsText : public TextSaver {
     return ' ';
   }
 
-  int cols_ = 16, rows_ = 2, w_ = 0, h_ = 0, water_ = 0, moon_ = 0;
+  int cols_ = 16, rows_ = 2, w_ = 0, h_ = 0, water_ = 0, moon_ = 0, sky0_ = 0;
+  char clock_text_[8] = {};
   uint8_t px_[TextScreen::MAX_ROWS * 9][TextScreen::MAX_COLS * 6];
   uint8_t sea_[8];
   int star_col_[3];

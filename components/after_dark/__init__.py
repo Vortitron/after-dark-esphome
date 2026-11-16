@@ -22,6 +22,8 @@ Saver options (see SAVER_OPTIONS):
   clocks:  face - melting_digital, classic, modern, art_deco or mutating.
            Default: mutating (ten photographs, 189 KB) on colour,
            melting_digital on a 1-bit panel.
+  dolphins: clock - true shows the time (HH:MM) in the sky on a character
+           LCD, a dolphin leaping in front of it (needs time_id).
   dosshell: commands - typed instead of DIR and the rest, each answered with
            a line per Home Assistant entity (needs `api:`):
              - dosshell:
@@ -148,6 +150,7 @@ SAVER_OPTIONS = {
         }
     ),
     "clocks": cv.Schema({cv.Optional("face"): cv.one_of(*CLOCKS_FACES, lower=True, space="_")}),
+    "dolphins": cv.Schema({cv.Optional("clock", default=False): cv.boolean}),
     "dosshell": cv.Schema(
         {
             cv.Optional("commands"): cv.All(
@@ -401,6 +404,9 @@ async def to_code(config):
                 cg.add_build_flag(f"-DAD_FISHPRO_{fish.upper()}")
         elif saver == "clocks" and "face" in options:
             cg.add_build_flag(f"-DAD_CLOCKS_TYPE={CLOCKS_FACES.index(options['face'])}")
+        elif saver == "dolphins" and options.get("clock"):
+            cg.add_global(cg.RawStatement("namespace adcore { extern bool dolphins_clock; }"))
+            cg.add(cg.RawExpression("::adcore::dolphins_clock = true"))
         elif saver == "dosshell":
             if options.get("commands"):
                 cg.add_build_flag("-DAD_SHELL_LIVE")
