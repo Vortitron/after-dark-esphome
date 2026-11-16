@@ -21,8 +21,8 @@ class TextScreen {
   void clear();
   /* A ROM character code, or 0-7 for a defined glyph. Clipped. A dim cell
      is shown at half strength where the panel runs frame-rate modulation
-     (lit every other pass, which a slow liquid crystal averages), and as
-     any other where it doesn't. */
+     (lit every other pass, out of step with its neighbours, which a slow
+     liquid crystal averages), and as any other where it doesn't. */
   void put(int col, int row, uint8_t code, bool dim = false);
   /* Five bits a row (bit 4 is the left column), top row first. */
   void glyph(int slot, const uint8_t bits[8]);
