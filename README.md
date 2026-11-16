@@ -12,7 +12,7 @@ component to a config yourself:
 
 ```yaml
 external_components:
-  - source: github://Vortitron/after-dark-esphome@v1.3.0
+  - source: github://Vortitron/after-dark-esphome@v1.3.1
     components: [after_dark]
 ```
 
