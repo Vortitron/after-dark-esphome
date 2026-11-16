@@ -26,6 +26,7 @@
 #include "ad_text.h"
 
 #include <memory>
+#include <vector>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,7 @@ class DisplaySurface : public ::adcore::Surface {
     width_ = d->get_width();
     height_ = d->get_height();
     mono_ = d->get_display_type() == display::DISPLAY_TYPE_BINARY;
+    set_subframes(subframes_);
   }
   int width() const override { return width_; }
   int height() const override { return height_; }
@@ -56,10 +58,22 @@ class DisplaySurface : public ::adcore::Surface {
   void pixel(int x, int y, ::adcore::Rgb c) override;
   void fill_rect(int x, int y, int w, int h, ::adcore::Rgb c) override;
 
+  /* Frame-rate modulation on a 1-bit panel: 2-4 subframes, 1 off. Each
+     pixel's shade is kept (a byte each), so that every subframe the
+     in-between shades can be drawn again, a grey dot lit in only some of
+     them: lit for a share of the time as well as a grey area having a share
+     of its dots lit. What is drawn already isn't known
+     here, so start the saver again after a change. */
+  void set_subframes(int n);
+  bool modulating() const { return !lum_.empty(); }
+  void next_subframe();
+
  protected:
   display::Display *display_{nullptr};
   int width_{0}, height_{0};
   bool mono_{false};
+  int subframes_{1}, phase_{0};
+  std::vector<uint8_t> lum_;
 };
 
 class AfterDarkComponent : public Component {
@@ -78,6 +92,13 @@ class AfterDarkComponent : public Component {
   void set_fps(int fps) { fps_ = fps; }
   /* Screensaver mode: the display stays the YAML's own until start(). */
   void set_screensaver_mode(bool on) { screensaver_mode_ = on; }
+  /* Frame-rate modulation on a 1-bit panel: 2-4 subframes (1 is off). The
+     screen is then rewritten as fast as it goes between the saver's frames.
+     Only the savers that draw in-between shades change. */
+  void set_frame_rate_modulation(int subframes);
+  int get_frame_rate_modulation() const { return subframes_; }
+  /* How many subframes it uses when on (what the YAML asked for, or 2). */
+  int frame_rate_modulation_when_on() const { return subframes_on_; }
   /* Character LCD: while this returns lines, they are shown instead. */
   void set_overlay(std::function<std::vector<std::string>()> &&f) { overlay_ = std::move(f); }
 
@@ -124,6 +145,7 @@ class AfterDarkComponent : public Component {
   std::string pick_random_();
   void blank_();
   void push_();
+  void count_subframe_(uint32_t now);
 
   display::Display *display_{nullptr};
   DisplaySurface surface_;
@@ -141,6 +163,9 @@ class AfterDarkComponent : public Component {
   std::string initial_;
   std::string current_;
   int fps_{30};
+  int subframes_{1}, subframes_on_{2};
+  uint32_t sub_ms_{0}, sent_{0}, rate_ms_{0};
+  std::string running_name_;
   struct ShellEntity {
     size_t command, line;
     std::string entity_id, attribute;

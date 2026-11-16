@@ -12,7 +12,7 @@ component to a config yourself:
 
 ```yaml
 external_components:
-  - source: github://Vortitron/after-dark-esphome@v1.2.0
+  - source: github://Vortitron/after-dark-esphome@v1.3.0
     components: [after_dark]
 ```
 
@@ -113,6 +113,7 @@ after_dark:
         face: classic
   saver: toasters               # starting saver, or "off"
   fps: 30                       # default 30, or 8 on a character LCD
+  frame_rate_modulation: false  # 1-bit OLEDs: smoother greys (see below)
   time_id: sntp_time            # for the clocks; without one they count from 10:10
 
 select:
@@ -276,6 +277,37 @@ does the opposite job: a lambda returning lines to show instead of the saver
 while it has any (a button's status message), with the saver carrying on
 underneath.
 
+### Smoother greys on a 1-bit OLED
+
+A 1-bit panel's pixels are only on or off, so a saver's greys are dithered: a
+share of the dots lit. `frame_rate_modulation: true` adds time to that.
+Between the saver's frames the screen is rewritten as fast as it will go, and
+a grey dot is lit in only some of the passes, so the eye sees it dimmer. The
+greys come out smoother, and the bright ones keep their dots. `true` is two
+passes; 3 or 4 make finer steps but flicker more.
+
+Only the savers that draw greys change: Mandelbrot, Mountains, Shapes,
+Spheres, Mowin', Hard Rain, GeoBounce and Starry Night. The rest draw art
+baked to black and white, which stays as it is.
+
+Over SPI it holds steady. Over I²C a 128×64 panel manages about 25 passes a
+second, so it shimmers; some find that fine and some don't. Raise the bus as
+far as the panel takes it (`frequency: 800kHz` on `i2c:`; many SSD1306s cope,
+though it's beyond their rating). The log reports the rate every 10 s. While
+it runs, sending frames takes most of the main loop, so the device's other
+components get less of it, and the shades take a byte of RAM per pixel (8 KB
+at 128×64). A switch turns it on and off from Home Assistant; it starts as
+the YAML says, then keeps what you last chose:
+
+```yaml
+switch:
+  - platform: after_dark
+    name: Screensaver shading
+```
+
+Character LCDs don't take it: nearly all their savers are hand-drawn 1-bit
+glyphs, with no greys to give.
+
 ### Flash
 
 The build leaves out what the screen can't show: a character LCD build has
@@ -306,7 +338,7 @@ compilers (`docs/savers.json`) and errs a few per cent high.
   nothing about ESPHome; each draws on an `adcore::Surface`, or for a
   character LCD on an `adcore::TextScreen` (`ad_text.h`). Shared drawing is
   in `ad_draw.h`, fonts (X11 misc-fixed) in `ad_font.h`.
-- `components/after_dark/after_dark_*`, `__init__.py`, `select.py`: the
+- `components/after_dark/after_dark_*`, `__init__.py`, `select.py`, `switch.py`: the
   ESPHome wrapper. `__init__.py` finds the savers by reading each file's
   `AD_REGISTER_SAVER` line.
 - `tools/`: the generators for the headers. They read the ripped art in a
@@ -332,6 +364,7 @@ make -C host gif SAVER=warp SCREEN=lcd16x2 FPS=8 FRAMES=80
 # -> host/out/<saver>-<screen>.gif
 
 host/preview.sh OUTDIR zot ad_zot.cpp   # one saver, every screen, contact sheets
+AD_FRM=2 host/render spheres 128x64m 200 OUTDIR   # frame-rate modulation, each frame a pass
 AD_SHELL_DEMO=1 host/render dosshell lcd16x2 480 OUTDIR 8   # DOS Shell with made-up live data
 AD_LCD_TEXT=1 AD_SHELL_DEMO=unix host/render dosshell lcd16x2 1200 - 20   # the panel as text, each change
 ```

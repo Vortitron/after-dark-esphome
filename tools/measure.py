@@ -45,6 +45,9 @@ BUILT_WITH_WARP = {
     'esp32s3': {'colour': 854152, 'mono': 807836},
     'esp32c3': {'colour': 899072, 'mono': 848692, 'text': 844752},
 }
+# The frame-rate modulation switch (switch: platform: after_dark), measured
+# on the C3 OLED.
+SWITCH_BYTES = 1700
 # App slot by flash size, ESPHome's APP_PARTITION_SIZES (two slots, for OTA).
 APP_SLOT = {'4MB': 0x1C0000, '8MB': 0x3C0000, '16MB': 0x7C0000}
 
@@ -129,6 +132,9 @@ def main():
     meta = json.load(open(os.path.join(HERE, 'savers.json')))
     warp = {k: results[('warp', k, '')] for k in KINDS}
     base = {board: {k: v - warp[k] for k, v in kinds.items()} for board, kinds in BUILT_WITH_WARP.items()}
+    # A 1-bit config from the builder also has the frame-rate modulation switch.
+    for kinds in base.values():
+        kinds['mono'] += SWITCH_BYTES
     report = {'base': base, 'app_slot': APP_SLOT, 'savers': {}}
     for name, info in table.items():
         entry = dict(meta[name])

@@ -108,6 +108,8 @@
     /* --- the CPU module (board and screen) ---------------------------------- */
     .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
     .field { display: grid; gap: 4px; }
+    .field[hidden] { display: none; }
+    .field .check { display: flex; align-items: center; gap: 8px; min-height: 36px; }
     .field > span { font: 600 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
     select {
       width: 100%; font: 15px var(--sans); color: var(--ink);
@@ -297,7 +299,7 @@
         <p>Put the After Dark screen savers on an ESP32 with a little screen, and pick one from Home Assistant. Switch on the modules you want, check they fit the flash, and copy the program into ESPHome. Only the modules you switch on go into the firmware.</p>
       </div>
       <div>
-        <div class="spec">MODEL <b>AD-ESP</b> · REV <b id="rev">v1.2.0</b><br>MODULES <b id="count">—</b> · BUS <b>I²C / SPI</b></div>
+        <div class="spec">MODEL <b>AD-ESP</b> · REV <b id="rev">v1.3.0</b><br>MODULES <b id="count">—</b> · BUS <b>I²C / SPI</b></div>
         <div class="lamps"><span class="lamp run"><i></i>RUN</span><span class="lamp fault" id="fault"><i></i>FLASH FULL</span></div>
       </div>
     </section>
@@ -334,6 +336,9 @@
               <option value="lcd2004">2004, 20 × 4, PCF8574 I²C backpack</option>
             </optgroup>
           </select>
+        </label>
+        <label class="field" id="frm-field" hidden><span>Shading</span>
+          <span class="check"><input type="checkbox" id="frm"> Frame-rate modulation</span>
         </label>
       </div>
       <p class="hint" id="screen-note" style="margin: 10px 0 0"></p>
@@ -427,7 +432,7 @@
     'use strict';
 
     /* The component's release that configs pin, and where the web versions are. */
-    var VERSION = 'v1.2.0';
+    var VERSION = 'v1.3.0';
     var SITE = 'https://vortitron.github.io/after-dark/';
 
     /* The screens: which kind of saver they get, and their ESPHome block. */
@@ -465,6 +470,7 @@
 
     function kb(n) { return n >= 1048576 ? (n / 1048576).toFixed(2) + ' MB' : Math.round(n / 1024) + ' KB'; }
     function kind() { return SCREENS[$('screen').value].kind; }
+    var FRM_NOTE = ' Frame-rate modulation gives the savers that draw greys (Mandelbrot, Mountains, Shapes, Spheres, Mowin’, Hard Rain, GeoBounce, Starry Night) smoother shading: the screen is rewritten as fast as it goes, a grey dot lit in only some of the passes. Over I²C it shimmers, which some find fine and some don’t; a switch in Home Assistant turns it on and off.';
 
     function base() {
       var b = data.base[$('board').value], k = kind();
@@ -636,7 +642,8 @@
     }
 
     function update() {
-      $('screen-note').textContent = SCREENS[$('screen').value].note;
+      $('screen-note').textContent = SCREENS[$('screen').value].note + (kind() === 'mono' ? FRM_NOTE : '');
+      $('frm-field').hidden = kind() !== 'mono';
       Array.prototype.forEach.call($('list').querySelectorAll('.mod'), function (mod) {
         var name = mod.dataset.name, s = data.savers[name], ok = available(name);
         var input = mod.querySelector('input');
@@ -724,10 +731,12 @@
           }
         });
         y += '  saver: ' + ($('start').value || names[0]) + '\n';
+        if (k === 'mono' && $('frm').checked) y += '  frame_rate_modulation: true   # smoother greys (the switch below)\n';
       } else {
         y += '  # switch on at least one saver module above\n';
       }
       y += '\nselect:\n  - platform: after_dark\n    name: Screensaver\n';
+      if (k === 'mono') y += '\nswitch:                          # frame-rate modulation, on and off\n  - platform: after_dark\n    name: Screensaver shading\n';
       return y;
     }
 
@@ -752,6 +761,7 @@
       });
     });
     $('start').addEventListener('change', function () { $('yaml').value = yaml(picked()); });
+    $('frm').addEventListener('change', function () { $('yaml').value = yaml(picked()); });
 
 
     /* ------------------------------------------------------- preview -- */

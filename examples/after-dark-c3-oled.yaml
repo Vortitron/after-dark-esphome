@@ -16,7 +16,7 @@ esp32:
     type: esp-idf
 
 external_components:
-  - source: github://Vortitron/after-dark-esphome@v1.2.0
+  - source: github://Vortitron/after-dark-esphome@v1.3.0
     components: [after_dark]
   # Or from a checkout of this repository:
   # - source:
@@ -59,7 +59,12 @@ after_dark:
   savers: all          # or a list; with none, a handful that suits any screen
   saver: toasters
   fps: 25
+  frame_rate_modulation: false   # true: smoother greys, by flicker (the switch below)
 
 select:
   - platform: after_dark
     name: Screensaver
+
+switch:
+  - platform: after_dark         # frame-rate modulation, on and off
+    name: Screensaver shading

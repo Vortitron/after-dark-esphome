@@ -11,6 +11,7 @@
             face: classic
       saver: toasters            # what to start with, or "off"
       fps: 30                    # default 30, or 8 on a character LCD
+      frame_rate_modulation: false  # 1-bit panels: true (2 subframes) or 2-4
       time_id: sntp_time         # for the clocks (optional)
 
 Saver options (see SAVER_OPTIONS):
@@ -78,6 +79,7 @@ CONF_LCD_ID = "lcd_id"
 CONF_SAVERS = "savers"
 CONF_SAVER = "saver"
 CONF_FPS = "fps"
+CONF_FRM = "frame_rate_modulation"
 CONF_AFTER_DARK_ID = "after_dark_id"
 CONF_MODE = "mode"
 CONF_OVERLAY = "overlay"
@@ -215,10 +217,19 @@ def available_savers(config):
     return savers
 
 
+def _subframes(value):
+    """false, true (2 subframes), or 2-4."""
+    if isinstance(value, bool) or (isinstance(value, str) and not value.strip().isdigit()):
+        return 2 if cv.boolean(value) else 1
+    return cv.int_range(min=2, max=4)(value)
+
+
 def _check(config):
     screensaver = config[CONF_MODE] == "screensaver"
     if screensaver and CONF_LCD_ID in config:
         raise cv.Invalid("screensaver mode is for pixel displays (display_id)", [CONF_MODE])
+    if config[CONF_FRM] > 1 and CONF_LCD_ID in config:
+        raise cv.Invalid("frame_rate_modulation is for 1-bit pixel displays (display_id)", [CONF_FRM])
     if CONF_OVERLAY in config and CONF_LCD_ID not in config:
         raise cv.Invalid("overlay is for character LCDs (lcd_id)", [CONF_OVERLAY])
     if screensaver:
@@ -247,6 +258,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_MODE, default="always"): cv.one_of("always", "screensaver", lower=True),
             cv.Optional(CONF_OVERLAY): cv.returning_lambda,
             cv.Optional(CONF_FPS): cv.int_range(min=1, max=60),
+            cv.Optional(CONF_FRM, default=False): _subframes,
             cv.Optional(CONF_TIME_ID): cv.use_id(RealTimeClock),
         }
     ).extend(cv.COMPONENT_SCHEMA),
@@ -364,6 +376,8 @@ async def to_code(config):
         cg.add(var.set_display(disp))
         fps = config.get(CONF_FPS, 30)
     cg.add(var.set_fps(fps))
+    if config[CONF_FRM] > 1:
+        cg.add(var.set_frame_rate_modulation(config[CONF_FRM]))
     if CONF_TIME_ID in config:
         cg.add_build_flag("-DAD_USE_TIME")
         cg.add(var.set_time(await cg.get_variable(config[CONF_TIME_ID])))

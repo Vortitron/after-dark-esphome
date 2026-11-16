@@ -38,8 +38,36 @@ class HostSurface : public Surface {
       fprintf(stderr, "pixel out of bounds: %d,%d\n", x, y);
       abort();
     }
-    if (mono_)
-      c = mono_on(x, y, c) ? Rgb{255, 255, 255} : BLACK;
+    if (mono_) {
+      int lum = mono_lum(c), n = 1;
+      if (!lum_.empty()) {
+        lum_[y * w_ + x] = lum;
+        n = subframes_;
+      }
+      c = mono_on_lum(x, y, lum, n, phase_) ? Rgb{255, 255, 255} : BLACK;
+    }
+    set_(x, y, c);
+  }
+  /* Frame-rate modulation, as the ESPHome surface does it. */
+  void set_subframes(int n) {
+    subframes_ = n;
+    if (mono_ && n > 1)
+      lum_.assign(w_ * h_, 0);
+  }
+  void next_subframe() {
+    if (lum_.empty())
+      return;
+    phase_ = (phase_ + 1) % subframes_;
+    for (int y = 0; y < h_; y++)
+      for (int x = 0; x < w_; x++) {
+        int l = lum_[y * w_ + x];
+        if (l > MONO_DARK && l < MONO_LIT)
+          set_(x, y, mono_on_lum(x, y, l, subframes_, phase_) ? Rgb{255, 255, 255} : BLACK);
+      }
+  }
+
+ private:
+  void set_(int x, int y, Rgb c) {
     uint8_t *p = &rgb_[(y * w_ + x) * 3];
     if (p[0] == c.r && p[1] == c.g && p[2] == c.b)
       return;  // the ESPHome buffers skip unchanged pixels too
@@ -51,6 +79,8 @@ class HostSurface : public Surface {
     if (x > x1_) x1_ = x;
     if (y > y1_) y1_ = y;
   }
+
+ public:
   /* Pixels in the box that changed since the last call. */
   long take_dirty() {
     long n = x1_ < x0_ ? 0 : (long) (x1_ - x0_ + 1) * (y1_ - y0_ + 1);
@@ -75,6 +105,8 @@ class HostSurface : public Surface {
   int w_, h_;
   bool mono_;
   std::vector<uint8_t> rgb_;
+  std::vector<uint8_t> lum_;
+  int subframes_ = 1, phase_ = 0;
   int x0_, y0_, x1_, y1_;
 };
 
@@ -278,6 +310,10 @@ int main(int argc, char **argv) {
   bool mono = screen[strlen(screen) - 1] == 'm';
 
   HostSurface surface(w, h, mono);
+  /* AD_FRM=2..4: frame-rate modulation, each frame written a subframe. */
+  const bool frm = getenv("AD_FRM") && atoi(getenv("AD_FRM")) > 1;
+  if (frm)
+    surface.set_subframes(atoi(getenv("AD_FRM")));
   std::unique_ptr<Saver> saver(e->make());
   saver->start(surface);
   surface.take_dirty();
@@ -285,6 +321,8 @@ int main(int argc, char **argv) {
   long total = 0, worst = 0;
   char path[1024];
   for (int i = 0; i < frames; i++) {
+    if (frm)
+      surface.next_subframe();
     saver->frame(surface, 1 / fps);
     clock_elapsed += 1 / fps;
     long d = surface.take_dirty();

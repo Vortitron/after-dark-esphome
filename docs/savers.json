@@ -7,12 +7,12 @@
  "base": {
   "esp32c3": {
    "colour": 896532,
-   "mono": 844890,
+   "mono": 846590,
    "text": 841016
   },
   "esp32s3": {
    "colour": 851612,
-   "mono": 804034
+   "mono": 805734
   }
  },
  "savers": {

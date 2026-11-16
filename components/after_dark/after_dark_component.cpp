@@ -13,10 +13,41 @@ namespace after_dark {
 static const char *const TAG = "after_dark";
 
 void DisplaySurface::pixel(int x, int y, ::adcore::Rgb c) {
-  if (mono_)
-    display_->draw_pixel_at(x, y, ::adcore::mono_on(x, y, c) ? display::COLOR_ON : display::COLOR_OFF);
-  else
+  if (!mono_) {
     display_->draw_pixel_at(x, y, Color(c.r, c.g, c.b));
+    return;
+  }
+  int lum = ::adcore::mono_lum(c), n = 1;
+  if (!lum_.empty()) {
+    lum_[y * width_ + x] = lum;
+    n = subframes_;
+  }
+  display_->draw_pixel_at(x, y, ::adcore::mono_on_lum(x, y, lum, n, phase_) ? display::COLOR_ON : display::COLOR_OFF);
+}
+
+void DisplaySurface::set_subframes(int n) {
+  subframes_ = n < 1 ? 1 : n > 4 ? 4 : n;
+  phase_ = 0;
+  if (mono_ && subframes_ > 1 && width_ > 0) {
+    lum_.assign((size_t) width_ * height_, 0);
+  } else {
+    lum_.clear();
+    lum_.shrink_to_fit();
+  }
+}
+
+/* On to the next subframe, and every in-between shade drawn again. */
+void DisplaySurface::next_subframe() {
+  if (lum_.empty())
+    return;
+  phase_ = (phase_ + 1) % subframes_;
+  const uint8_t *l = lum_.data();
+  for (int y = 0; y < height_; y++)
+    for (int x = 0; x < width_; x++, l++)
+      if (*l > ::adcore::MONO_DARK && *l < ::adcore::MONO_LIT)
+        display_->draw_pixel_at(x, y,
+                                ::adcore::mono_on_lum(x, y, *l, subframes_, phase_) ? display::COLOR_ON
+                                                                                    : display::COLOR_OFF);
 }
 
 void DisplaySurface::fill_rect(int x, int y, int w, int h, ::adcore::Rgb c) {
@@ -25,9 +56,12 @@ void DisplaySurface::fill_rect(int x, int y, int w, int h, ::adcore::Rgb c) {
     return;
   if (!mono_)
     display_->filled_rectangle(r.x, r.y, r.w, r.h, Color(c.r, c.g, c.b));
-  else if (c.r == 0 && c.g == 0 && c.b == 0)
+  else if (c.r == 0 && c.g == 0 && c.b == 0) {
     display_->filled_rectangle(r.x, r.y, r.w, r.h, display::COLOR_OFF);
-  else
+    if (!lum_.empty())
+      for (int j = 0; j < r.h; j++)
+        memset(&lum_[(r.y + j) * width_ + r.x], 0, r.w);
+  } else
     Surface::fill_rect(r.x, r.y, r.w, r.h, c);  // dithered, a pixel at a time
 }
 
@@ -185,10 +219,12 @@ bool AfterDarkComponent::run_(const std::string &name) {
     ESP_LOGW(TAG, "No saver called '%s' for this screen in this build", name.c_str());
     return false;
   }
+  running_name_ = name;
   if (text_mode_()) {
     text_saver_.reset(e->make_text());
     text_saver_->start(text_);
   } else {
+    surface_.set_subframes(subframes_);  // a fresh record of the shades
     saver_.reset(e->make());
     saver_->start(surface_);
   }
@@ -262,6 +298,7 @@ void AfterDarkComponent::stop() {
     return;
   saver_.reset();
   text_saver_.reset();
+  surface_.set_subframes(1);  // the record of shades isn't needed till next time
   high_freq_.stop();
   auto *d = static_cast<display::Display *>(display_);
   d->*DisplayInternals::writer() = std::move(saved_writer_);
@@ -278,15 +315,30 @@ void AfterDarkComponent::loop() {
     return;
   uint32_t now = millis();
   uint32_t elapsed = now - last_ms_;
-  if (elapsed < 1000u / fps_)
+  /* Frame-rate modulation: between the saver's frames, subframes as fast as
+     the screen takes them; each of the saver's frames is one too. */
+  const bool modulating = saver_ && surface_.modulating();
+  if (elapsed < 1000u / fps_) {
+    if (modulating && now - sub_ms_ >= 2) {
+      sub_ms_ = now;
+      surface_.next_subframe();
+      push_();
+      count_subframe_(now);
+    }
     return;
-  last_ms_ = now;
+  }
+  last_ms_ = sub_ms_ = now;
   /* A stall (OTA, a slow push) shouldn't send everything flying. */
   float dt = elapsed > 250 ? 0.25f : elapsed / 1000.0f;
-  if (text_saver_)
+  if (text_saver_) {
     text_saver_->frame(text_, dt);
-  else
+  } else {
+    if (modulating) {
+      surface_.next_subframe();
+      count_subframe_(now);
+    }
     saver_->frame(surface_, dt);
+  }
 #ifdef AD_USE_LCD
   /* The YAML's own messages (a button's "Lights off") take the panel while
      they last; the saver carries on underneath. */
@@ -314,6 +366,29 @@ void AfterDarkComponent::loop() {
   push_();
 }
 
+void AfterDarkComponent::set_frame_rate_modulation(int subframes) {
+  subframes_ = subframes < 1 ? 1 : subframes > 4 ? 4 : subframes;
+  if (subframes_ > 1)
+    subframes_on_ = subframes_;
+  sent_ = 0;
+  rate_ms_ = millis();
+  /* The shades already drawn weren't kept, so the saver starts again. */
+  if (saver_ && surface_.mono())
+    run_(running_name_);
+}
+
+/* How fast the subframes go out, in the log: below about 100 a second
+   they flicker (an I2C OLED manages about 25). */
+void AfterDarkComponent::count_subframe_(uint32_t now) {
+  sent_++;
+  if (now - rate_ms_ >= 10000) {
+    ESP_LOGD(TAG, "%.0f subframes a second (%d-way frame-rate modulation)", sent_ * 1000.0f / (now - rate_ms_),
+             subframes_);
+    sent_ = 0;
+    rate_ms_ = now;
+  }
+}
+
 void AfterDarkComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "After Dark:");
   if (text_mode_())
@@ -321,6 +396,8 @@ void AfterDarkComponent::dump_config() {
   else
     ESP_LOGCONFIG(TAG, "  Screen: %dx%d%s at up to %d fps", surface_.width(), surface_.height(),
                   surface_.mono() ? " (1-bit)" : "", fps_);
+  if (surface_.mono())
+    ESP_LOGCONFIG(TAG, "  Frame-rate modulation: %d subframe%s", subframes_, subframes_ == 1 ? " (off)" : "s");
   ESP_LOGCONFIG(TAG, "  Saver: %s", current_.c_str());
   for (const auto &c : ::adcore::shell_commands)
     ESP_LOGCONFIG(TAG, "  DOS Shell command: %s (%u lines)", c.name.c_str(), (unsigned) c.lines.size());

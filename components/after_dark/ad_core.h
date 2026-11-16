@@ -77,11 +77,24 @@ extern Random rng;
  * black and white so this is a threshold for it; anything in between gets an
  * ordered dither, which keeps erasing a sprite exact (no error to carry).
  */
-inline bool mono_on(int x, int y, Rgb c) {
+inline int mono_lum(Rgb c) { return (77 * c.r + 150 * c.g + 29 * c.b) >> 8; }
+/* A shade at or below MONO_DARK is never lit, one at or above MONO_LIT always,
+   whatever the subframe. */
+static const int MONO_DARK = 16, MONO_LIT = 240;
+/* With frame-rate modulation over `subframes` (2-4) it is an ordered dither
+   with subframes+1 levels: how many of the subframes the pixel is lit in. So
+   the greys spread as evenly as the plain ones do, and which subframes go
+   round by the matrix, so each lights about as many pixels as the next. */
+inline bool mono_on_lum(int x, int y, int lum, int subframes = 1, int phase = 0) {
   static const uint8_t BAYER[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
-  int lum = (77 * c.r + 150 * c.g + 29 * c.b) >> 8;
-  return lum > BAYER[y & 3][x & 3] * 14 + 16;
+  const int b = BAYER[y & 3][x & 3];
+  const int v = subframes * (lum - MONO_DARK) - 14 * b;
+  if (v <= 0)
+    return false;
+  const int count = (v + 223) / 224;
+  return (phase + b) % subframes < count;
 }
+inline bool mono_on(int x, int y, Rgb c) { return mono_on_lum(x, y, mono_lum(c)); }
 
 /* Math.round(): halves go up. */
 inline int round_half_up(float v) { return (int) floorf(v + 0.5f); }
