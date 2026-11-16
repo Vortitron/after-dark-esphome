@@ -198,14 +198,13 @@ void AfterDarkComponent::push_text_modulated_() {
   }
   auto send = LcdInternals::send_fn();
   auto command = LcdInternals::command_fn();
+  const bool blank = text_phase_ & 1;
   for (int r = 0; r < text_.rows(); r++) {
     /* The HD44780's rows start at 0x00 and 0x40; a third and fourth carry
        on from the end of the first two. */
     const uint8_t base = (r & 1 ? 0x40 : 0x00) + (r >= 2 ? text_.cols() : 0);
     for (int c = 0; c < text_.cols();) {
-      /* Neighbouring dim cells take turns, so a dim word as a whole never
-         blinks, only its letters, out of step. */
-      auto want = [&](int i) -> uint8_t { return ((text_phase_ + i + r) & 1) && text_.dim(i, r) ? ' ' : text_.at(i, r); };
+      auto want = [&](int i) -> uint8_t { return blank && text_.dim(i, r) ? ' ' : text_.at(i, r); };
       if (want(c) == panel_[r][c]) {
         c++;
         continue;
@@ -371,9 +370,9 @@ void AfterDarkComponent::loop() {
       count_subframe_(now);
     }
 #ifdef AD_USE_LCD
-    /* A character LCD's dim cells, blank every other pass, as fast as the
-       bus takes them: slower, a still dim word flickers. */
-    if (text_saver_ && subframes_ > 1 && !overlay_shown_ && now - sub_ms_ >= 2 && text_.any_dim()) {
+    /* A character LCD's dim cells, blank every other pass. Its crystal is
+       slow, so 100 passes a second is plenty. */
+    if (text_saver_ && subframes_ > 1 && !overlay_shown_ && now - sub_ms_ >= 10 && text_.any_dim()) {
       sub_ms_ = now;
       text_phase_ ^= 1;
       push_();
