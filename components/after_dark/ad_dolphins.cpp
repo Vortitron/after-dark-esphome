@@ -1005,12 +1005,16 @@ class DolphinsText : public TextSaver {
         bool blank = true;
         for (int y = 0; y < 8; y++)
           blank &= bits[y] == 0;
+        /* The sea is dim where the panel can do it, so a dolphin and its
+           splash stand out bright against it. */
         if (r == rows_ - 1 && !memcmp(bits, sea, 8)) {
-          t.put(c, r, 0);
+          t.put(c, r, 0, true);
           continue;
         }
         if (blank) {
-          t.put(c, r, star(c, r));
+          bool faint;
+          uint8_t s = star(c, r, faint);
+          t.put(c, r, s, faint);
           continue;
         }
         int slot = -1;
@@ -1026,13 +1030,18 @@ class DolphinsText : public TextSaver {
       }
   }
 
-  /* A few stars in the top row, coming and going. */
-  uint8_t star(int c, int r) const {
+  /* A few stars in the top row, coming and going: faint (dim, where the
+     panel can do it) on the way in and out. */
+  uint8_t star(int c, int r, bool &faint) const {
+    faint = false;
     if (r != 0)
       return ' ';
     for (int i = 0; i < 3; i++)
-      if (star_col_[i] == c && c != moon_)
-        return sinf(t_ * 1.3f + star_phase_[i]) > -0.3f ? (i == 1 ? '\'' : '.') : ' ';
+      if (star_col_[i] == c && c != moon_) {
+        float s = sinf(t_ * 1.3f + star_phase_[i]);
+        faint = s < 0.35f;
+        return s > -0.3f ? (i == 1 ? '\'' : '.') : ' ';
+      }
     return ' ';
   }
 
