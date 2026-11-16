@@ -19,7 +19,12 @@ AfterDarkSwitch = after_dark_ns.class_("AfterDarkSwitch", switch.Switch, cg.Comp
 
 CONFIG_SCHEMA = (
     switch.switch_schema(
-        AfterDarkSwitch, icon="mdi:gradient-horizontal", entity_category=ENTITY_CATEGORY_CONFIG, block_inverted=True
+        AfterDarkSwitch,
+        icon="mdi:gradient-horizontal",
+        entity_category=ENTITY_CATEGORY_CONFIG,
+        block_inverted=True,
+        # Kept over a restart once changed; until then, as the YAML says.
+        default_restore_mode="RESTORE_DEFAULT_OFF",
     )
     .extend({cv.GenerateID(CONF_AFTER_DARK_ID): cv.use_id(AfterDarkComponent)})
     .extend(cv.COMPONENT_SCHEMA)
