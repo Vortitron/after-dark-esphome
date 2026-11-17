@@ -333,7 +333,9 @@ class StarryNight : public Saver {
  * at a time, so neighbouring cells don't blink together. Stars are ROM dots
  * in the sky cells, put up and knocked out at random. The flasher is a glyph
  * with a dot over the tallest roof, and the shooting star a streak that runs
- * down the top row until it meets a building.
+ * down the top row until it meets a building. Where the panel shows dim
+ * cells, stars come in faint and some brighten, fading again before they go,
+ * and some of the low buildings stand further back, dim.
  */
 enum { G_WIN0 = 0, WINS = 5, G_FLASH = 5, G_STREAK = 6 };
 /* Where windows can be in a cell, as (row, column mask): dots or dashes. */
@@ -361,7 +363,9 @@ class StarryText : public TextSaver {
           height_[c] = tall;
     }
     tallest_ = -1;
+    depth_ = t.dimmable();
     for (int c = 0; c < cols_; c++) {
+      far_[c] = false;
       win_[c] = rnd(WINS);
       if (height_[c] > 0 && (tallest_ < 0 || height_[c] > height_[tallest_]))
         tallest_ = c;
@@ -371,9 +375,22 @@ class StarryText : public TextSaver {
       for (int k = 0; k < 12; k++)
         lit_[g][k] = false;
     }
+    /* Low buildings set back, a run at a time (never the one with the light). */
+    if (depth_)
+      for (int c = 0; c < cols_;) {
+        int run = 1;
+        while (c + run < cols_ && height_[c + run] == height_[c])
+          run++;
+        bool back = height_[c] == 1 && rnd(2) == 0;
+        for (int k = c; k < c + run; k++)
+          far_[k] = back && k != tallest_;
+        c += run;
+      }
     for (int r = 0; r < rows_; r++)
-      for (int c = 0; c < cols_; c++)
+      for (int c = 0; c < cols_; c++) {
         star_[r][c] = 0;
+        faint_[r][c] = false;
+      }
     light_ = false;
     light_t_ = 0;
     streak_ = -1;
@@ -405,13 +422,24 @@ class StarryText : public TextSaver {
   void step() {
     /* A star somewhere in the sky, leaning to the top. */
     int c = rnd(cols_), r = low(rows_);
-    if (r < sky_rows(c))
+    if (r < sky_rows(c)) {
       star_[r][c] = 1 + rnd(sizeof STAR_CHARS);
-    /* Stars and windows go out. */
+      faint_[r][c] = depth_;
+    }
+    /* Stars and windows go out (a bright star fading first). */
     for (int i = 0; i < 2; i++) {
       c = rnd(cols_);
       r = rnd(rows_);
-      star_[r][c] = 0;
+      if (star_[r][c] && depth_ && !faint_[r][c])
+        faint_[r][c] = true;
+      else
+        star_[r][c] = 0;
+    }
+    /* Faint ones brighten. */
+    for (int i = 0; depth_ && i < 3; i++) {
+      c = rnd(cols_);
+      r = rnd(rows_);
+      faint_[r][c] = false;
     }
     int g = rnd(WINS * 3);
     if (g < WINS)
@@ -473,9 +501,9 @@ class StarryText : public TextSaver {
       int top = sky_rows(c);
       for (int r = 0; r < rows_; r++) {
         if (r >= top)
-          t.put(c, r, c == tallest_ && r == top ? (uint8_t) G_FLASH : (uint8_t) (G_WIN0 + win_[c]));
+          t.put(c, r, c == tallest_ && r == top ? (uint8_t) G_FLASH : (uint8_t) (G_WIN0 + win_[c]), far_[c]);
         else if (star_[r][c])
-          t.put(c, r, STAR_CHARS[star_[r][c] - 1]);
+          t.put(c, r, STAR_CHARS[star_[r][c] - 1], faint_[r][c]);
       }
     }
     if (streak_ >= 0)
@@ -486,6 +514,9 @@ class StarryText : public TextSaver {
   int height_[TextScreen::MAX_COLS];
   uint8_t win_[TextScreen::MAX_COLS];
   uint8_t star_[TextScreen::MAX_ROWS][TextScreen::MAX_COLS];
+  bool faint_[TextScreen::MAX_ROWS][TextScreen::MAX_COLS];
+  bool far_[TextScreen::MAX_COLS];
+  bool depth_ = false;
   bool lit_[WINS][12];
   uint8_t style_[WINS];
   int tallest_ = -1;

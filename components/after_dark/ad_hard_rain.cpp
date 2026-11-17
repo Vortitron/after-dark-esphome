@@ -372,6 +372,9 @@ class HardRain : public Saver {
   float reach = REACH;
   bool clear_screen = false;
   float scale = 0;  // 0: from the screen
+  /* The later, wider rings grey: a ripple dying away (dim on a character
+     LCD that can do it). */
+  bool fade = false;
 
   void start(Surface &s) override {
     w_ = s.width();
@@ -430,7 +433,8 @@ class HardRain : public Saver {
            canvas strokes on the line, so half the pen is either side. */
         float r = (8 + 6 * d.k) * sc_ / 2;
         float pen = d.k < d.n / 2 ? 2 : 1;
-        ring(s, d.x, d.y, r - pen / 2, r + pen / 2, d.colour);
+        const Rgb DYING = {120, 120, 120};
+        ring(s, d.x, d.y, r - pen / 2, r + pen / 2, fade && d.k >= d.n / 2 ? DYING : d.colour);
       } else {
         /* 2 px wider than the last, black pen and brush. */
         float r = ((8 + 6 * (d.n - 1)) * sc_ + 2) / 2;
@@ -448,7 +452,8 @@ class HardRain : public Saver {
   int drops_n_ = 0;
 };
 
-/* On a character LCD: three drops, a quarter the size, on a DotMatrix. */
+/* On a character LCD: three drops, a quarter the size, on a DotMatrix; the
+   ripples fade as they spread where the panel can dim. */
 class HardRainText : public TextSaver {
  public:
   void start(TextScreen &t) override {
@@ -457,6 +462,7 @@ class HardRainText : public TextSaver {
     rain_.reach = 30;
     rain_.scale = 0.25f;
     rain_.clear_screen = true;
+    rain_.fade = t.dimmable();
     rain_.start(dots_);
     dots_.compose(t);
   }

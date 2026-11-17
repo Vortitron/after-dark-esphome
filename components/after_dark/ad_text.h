@@ -30,6 +30,11 @@ class TextScreen {
   /* Five bits a row (bit 4 is the left column), top row first. */
   void glyph(int slot, const uint8_t bits[8]);
 
+  /* Whether dim cells show as dim (the panel runs frame-rate modulation),
+     so a saver can draw depth with them, or keep to its plain look. */
+  void set_dimmable(bool on) { dimmable_ = on; }
+  bool dimmable() const { return dimmable_; }
+
   /* For whatever drives the panel. */
   uint8_t at(int col, int row) const { return chars_[row][col]; }
   /* What a modulated cell shows on the odd passes (its own code if it isn't
@@ -51,6 +56,7 @@ class TextScreen {
   uint8_t sent_[MAX_ROWS][MAX_COLS];
   uint8_t glyphs_[GLYPHS][8];
   uint8_t glyph_dirty_ = 0xFF;
+  bool dimmable_ = false;
 };
 
 class TextSaver {
@@ -64,7 +70,9 @@ class TextSaver {
  * Runs a pixel saver on a character LCD. It is a 1-bit Surface laid out like
  * the panel, cells 5x8 with a dot's gap between them (so 95x17 for a 1602),
  * and compose() turns it into characters: the eight cells with the most lit
- * get exact glyphs, the rest the nearest of a few ROM characters.
+ * get exact glyphs, the rest the nearest of a few ROM characters. Where the
+ * panel shows dim cells, a mid grey is a dim dot instead of a dithered one,
+ * and a cell of nothing but dim dots is dim.
  */
 class DotMatrix : public Surface {
  public:
@@ -77,7 +85,10 @@ class DotMatrix : public Surface {
 
  private:
   int cols_ = 16, rows_ = 2;
+  /* As dithered (no dim cells), and as bright and dim dots. */
   uint8_t cells_[TextScreen::MAX_ROWS][TextScreen::MAX_COLS][8];
+  uint8_t bright_[TextScreen::MAX_ROWS][TextScreen::MAX_COLS][8];
+  uint8_t dim_[TextScreen::MAX_ROWS][TextScreen::MAX_COLS][8];
 };
 
 /* A glyph from ASCII art, '#' lit: the five columns starting at `col`. */

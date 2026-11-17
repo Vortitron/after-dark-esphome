@@ -108,6 +108,7 @@ void AfterDarkComponent::setup() {
   if (text_mode_()) {
     lcd_->stop_poller();
     text_.begin(lcd_cols_, lcd_rows_);
+    text_.set_dimmable(subframes_ > 1);
   }
 #endif
   if (!text_mode_()) {
@@ -455,6 +456,7 @@ void AfterDarkComponent::set_frame_rate_modulation(int subframes) {
   /* A character LCD: whichever way it now goes, send it all again. */
   panel_ok_ = false;
   text_.invalidate();
+  text_.set_dimmable(subframes_ > 1);
 #endif
 }
 

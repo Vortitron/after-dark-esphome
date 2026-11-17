@@ -179,6 +179,7 @@ int run_lcd(const SaverEntry *e, int cols, int rows, int frames, const char *dir
   }
   TextScreen t;
   t.begin(cols, rows);
+  t.set_dimmable(getenv("AD_FRM") && atoi(getenv("AD_FRM")) > 1);
   std::unique_ptr<TextSaver> saver(e->make_text());
   saver->start(t);
   t.mark_sent();

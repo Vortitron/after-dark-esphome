@@ -38,6 +38,9 @@ class Warp : public Saver {
   int count = 71;
   int size = 0;  // small, big, both
   bool colour = false;
+  /* Far stars grey (a dim cell on a character LCD that can do them) and
+     near ones big. */
+  bool depth = false;
 
   void start(Surface &s) override {
     w_ = s.width();
@@ -88,8 +91,9 @@ class Warp : public Saver {
         continue;
       st.px = (int16_t) floorf(x);
       st.py = (int16_t) floorf(y);
-      st.drawn = st.big ? 2 : 1;
-      s.fill_rect(st.px, st.py, st.drawn, st.drawn, st.rgb);
+      st.drawn = st.big || (depth && st.z < BIRTH * 0.45f) ? 2 : 1;
+      const Rgb FAR = {120, 120, 120};
+      s.fill_rect(st.px, st.py, st.drawn, st.drawn, depth && st.z > BIRTH * 0.7f ? FAR : st.rgb);
     }
   }
 
@@ -160,13 +164,15 @@ class Warp : public Saver {
   Star stars_[MAX_STARS];
 };
 
-/* On a character LCD: the same stars on a DotMatrix, fewer of them. */
+/* On a character LCD: the same stars on a DotMatrix, fewer of them, far
+   ones dim where the panel can show it. */
 class WarpText : public TextSaver {
  public:
   void start(TextScreen &t) override {
     dots_.begin(t.cols(), t.rows());
-    warp_.count = t.cols() * t.rows() * 2 / 5;
+    warp_.count = t.cols() * t.rows() * (t.dimmable() ? 3 : 2) / 5;
     warp_.velocity = -4;
+    warp_.depth = t.dimmable();
     warp_.start(dots_);
     dots_.compose(t);
   }

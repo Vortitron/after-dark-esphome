@@ -69,17 +69,28 @@ void DotMatrix::begin(int cols, int rows) {
   cols_ = cols < TextScreen::MAX_COLS ? cols : TextScreen::MAX_COLS;
   rows_ = rows < TextScreen::MAX_ROWS ? rows : TextScreen::MAX_ROWS;
   memset(cells_, 0, sizeof cells_);
+  memset(bright_, 0, sizeof bright_);
+  memset(dim_, 0, sizeof dim_);
 }
 
 void DotMatrix::pixel(int x, int y, Rgb c) {
   int dx = x % 6, dy = y % 9;
   if (dx == 5 || dy == 8)
     return;  // the gap between cells
+  const uint8_t bit = 0x10 >> dx;
+  const int lum = mono_lum(c);
   uint8_t &row = cells_[y / 9][x / 6][dy];
-  if (mono_on(x, y, c))
-    row |= 0x10 >> dx;
+  if (mono_on_lum(x, y, lum))
+    row |= bit;
   else
-    row &= ~(0x10 >> dx);
+    row &= ~bit;
+  uint8_t &hi = bright_[y / 9][x / 6][dy], &lo = dim_[y / 9][x / 6][dy];
+  hi &= ~bit;
+  lo &= ~bit;
+  if (lum >= 160)
+    hi |= bit;
+  else if (lum >= 40)
+    lo |= bit;
 }
 
 namespace {
@@ -114,13 +125,26 @@ int distance(const uint8_t *a, const uint8_t *b) {
 }  // namespace
 
 void DotMatrix::compose(TextScreen &t) {
+  /* Each cell's dots, and whether it is dim (only dim dots in it). */
+  const bool depth = t.dimmable();
+  uint8_t bits_of[TextScreen::MAX_ROWS][TextScreen::MAX_COLS][8];
+  bool dim[TextScreen::MAX_ROWS][TextScreen::MAX_COLS];
+  for (int r = 0; r < rows_; r++)
+    for (int c = 0; c < cols_; c++) {
+      bool any_bright = false;
+      for (int y = 0; y < 8; y++) {
+        bits_of[r][c][y] = depth ? bright_[r][c][y] | dim_[r][c][y] : cells_[r][c][y];
+        any_bright |= bright_[r][c][y] != 0;
+      }
+      dim[r][c] = depth && !any_bright;
+    }
   /* The lit cells, most ink first. */
   int order[TextScreen::MAX_ROWS * TextScreen::MAX_COLS];
   int weight[TextScreen::MAX_ROWS * TextScreen::MAX_COLS];
   int lit = 0;
   for (int r = 0; r < rows_; r++) {
     for (int c = 0; c < cols_; c++) {
-      int w = ink(cells_[r][c]);
+      int w = ink(bits_of[r][c]);
       if (w == 0) {
         t.put(c, r, ' ');
         continue;
@@ -137,10 +161,10 @@ void DotMatrix::compose(TextScreen &t) {
   }
   for (int i = 0; i < lit; i++) {
     int r = order[i] / cols_, c = order[i] % cols_;
-    const uint8_t *bits = cells_[r][c];
+    const uint8_t *bits = bits_of[r][c];
     if (i < TextScreen::GLYPHS) {
       t.glyph(i, bits);
-      t.put(c, r, i);
+      t.put(c, r, i, dim[r][c]);
       continue;
     }
     const Stand *best = &STANDS[0];
@@ -152,7 +176,7 @@ void DotMatrix::compose(TextScreen &t) {
         best = &s;
       }
     }
-    t.put(c, r, best->code);
+    t.put(c, r, best->code, dim[r][c]);
   }
 }
 

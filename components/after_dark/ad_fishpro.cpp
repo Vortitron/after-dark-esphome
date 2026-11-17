@@ -845,6 +845,11 @@ class FishProText : public TextSaver {
       f.x = rng.range(0, cols_);
       f.row = rng.below(rows_);
       f.cycle = rng.range(0, 2);
+      /* Where the panel can dim: every other one further back, dim and
+         slower, the near ones passing in front. */
+      f.far = t.dimmable() && i % 2 == 0;
+      if (f.far)
+        f.speed *= 0.6f;
     }
     bubble_ = -1;
     next_bubble_ = 1;
@@ -884,7 +889,7 @@ class FishProText : public TextSaver {
   struct Swimmer {
     float x, speed, cycle;
     int row;
-    bool deep, right;
+    bool deep, right, far;
   };
 
   void draw(TextScreen &t) {
@@ -894,11 +899,14 @@ class FishProText : public TextSaver {
     t.clear();
     if (bubble_ >= 0)
       t.put(bubble_col_, (int) bubble_, G_BUBBLE);
-    for (int i = 0; i < n_; i++) {
-      const Swimmer &f = fish_[i];
-      int code = f.deep ? G_DEEP_L + f.right : G_SMALL_L0 + f.right * 2 + (int) f.cycle % 2;
-      t.put((int) floorf(f.x + 0.5f), f.row, code);
-    }
+    for (int pass = 0; pass < 2; pass++)
+      for (int i = 0; i < n_; i++) {
+        const Swimmer &f = fish_[i];
+        if (f.far != (pass == 0))
+          continue;
+        int code = f.deep ? G_DEEP_L + f.right : G_SMALL_L0 + f.right * 2 + (int) f.cycle % 2;
+        t.put((int) floorf(f.x + 0.5f), f.row, code, f.far);
+      }
   }
 
   int cols_ = 16, rows_ = 2, n_ = 0;
