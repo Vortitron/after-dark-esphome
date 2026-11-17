@@ -23,6 +23,7 @@
 
 #include "ad_core.h"
 #include "ad_live.h"
+#include "ad_meters.h"
 #include "ad_text.h"
 
 #include <memory>

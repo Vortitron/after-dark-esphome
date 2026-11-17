@@ -33,6 +33,14 @@ Saver options (see SAVER_OPTIONS):
            weather - a text sensor with Home Assistant's conditions (rainy,
              cloudy...): a glyph at the right of the sky for all but a
              clear one, and no stars when it's clouded over.
+  meters:  a pair of VU meters, left and right (an extra, not a module):
+           left, right - a sensor, or a lambda read every frame, giving the
+             level (right follows left if it has none); with neither, the
+             meters dance to made-up music;
+           min, max - the level at each end of the scale (default 0-100);
+           style - on a character LCD: bars (a row each, to the dot, the
+             peak held), needles (two meters in the top row) or both,
+             taking turns every half minute. Default bars.
   dosshell: commands - typed instead of DIR and the rest, each answered with
            a line per Home Assistant entity (needs `api:`):
              - dosshell:
@@ -166,6 +174,15 @@ SAVER_OPTIONS = {
             cv.Optional("latitude"): cv.Any(cv.float_range(min=-90, max=90), cv.use_id(sensor.Sensor)),
             cv.Optional("longitude"): cv.Any(cv.float_range(min=-180, max=360), cv.use_id(sensor.Sensor)),
             cv.Optional("weather"): cv.use_id(text_sensor.TextSensor),
+        }
+    ),
+    "meters": cv.Schema(
+        {
+            cv.Optional("left"): cv.Any(cv.use_id(sensor.Sensor), cv.returning_lambda),
+            cv.Optional("right"): cv.Any(cv.use_id(sensor.Sensor), cv.returning_lambda),
+            cv.Optional("min", default=0): cv.float_,
+            cv.Optional("max", default=100): cv.float_,
+            cv.Optional("style", default="bars"): cv.one_of("bars", "needles", "both", lower=True),
         }
     ),
     "dosshell": cv.Schema(
@@ -398,6 +415,25 @@ async def _dolphins_to_code(var, options):
         )
 
 
+async def _meters_to_code(var, options):
+    """What drives the meters: a sensor's state or a lambda per channel."""
+    inp = "::adcore::meter_input"
+    cg.add(cg.RawExpression(f"{inp}.lo = {options['min']}f"))
+    cg.add(cg.RawExpression(f"{inp}.hi = {options['max']}f"))
+    style = ["bars", "needles", "both"].index(options["style"])
+    if style:
+        cg.add(cg.RawExpression(f"{inp}.style = {style}"))
+    for ch, key in enumerate(("left", "right")):
+        if key not in options:
+            continue
+        if isinstance(options[key], ID):
+            source = await cg.get_variable(options[key])
+            cg.add(source.add_on_state_callback(cg.RawExpression(f"[](float x) {{ {inp}.set({ch}, x); }}")))
+        else:
+            fn = await cg.process_lambda(options[key], [], return_type=cg.float_)
+            cg.add(cg.RawExpression(f"{inp}.fn[{ch}] = {fn}"))
+
+
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
@@ -448,6 +484,8 @@ async def to_code(config):
             cg.add_build_flag(f"-DAD_CLOCKS_TYPE={CLOCKS_FACES.index(options['face'])}")
         elif saver == "dolphins":
             await _dolphins_to_code(var, options)
+        elif saver == "meters":
+            await _meters_to_code(var, options)
         elif saver == "dosshell":
             if options.get("commands"):
                 cg.add_build_flag("-DAD_SHELL_LIVE")

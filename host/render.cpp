@@ -16,6 +16,7 @@
 #include "../components/after_dark/ad_text.h"
 #include "../components/after_dark/ad_sky.h"
 #include "../components/after_dark/ad_live.h"
+#include "../components/after_dark/ad_meters.h"
 #include "font5x8.h"
 
 #include <cstdio>
@@ -296,6 +297,8 @@ int main(int argc, char **argv) {
     sscanf(getenv("AD_SKY"), "%f,%f", &sky.lat, &sky.lon);
   if (getenv("AD_WEATHER"))
     sky.weather = weather_from(getenv("AD_WEATHER"));
+  if (getenv("AD_METERS_STYLE"))  // 0 bars, 1 needles, 2 both
+    meter_input.style = atoi(getenv("AD_METERS_STYLE"));
   if (getenv("AD_EVERY"))
     every = atoi(getenv("AD_EVERY")) > 0 ? atoi(getenv("AD_EVERY")) : 1;
   clock_start = getenv("AD_TIME") ? (time_t) atoll(getenv("AD_TIME")) : time(nullptr);
