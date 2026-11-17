@@ -1,10 +1,14 @@
 #include "after_dark_component.h"
+#if defined(AD_SAVER_DOLPHINS) || defined(AD_ALL_SAVERS)
+#include "ad_sky.h"
+#endif
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 #ifdef USE_API
 #include "esphome/components/api/api_server.h"
 #endif
 
+#include <cmath>
 #include <cstring>
 
 namespace esphome {
@@ -71,8 +75,24 @@ static bool esphome_time(::adcore::Clock &c) {
   ESPTime t = clock_->now();
   if (!t.is_valid())
     return false;
-  c = {t.year, t.month, t.day_of_month, t.day_of_week - 1, t.hour, t.minute, t.second};
+  c = {t.year, t.month, t.day_of_month, t.day_of_week - 1, t.hour, t.minute, t.second, (long long) t.timestamp};
   return true;
+}
+#endif
+
+#if defined(AD_SAVER_DOLPHINS) || defined(AD_ALL_SAVERS)
+/* Home Assistant's sensors come and go (NaN while unavailable): the sky
+   keeps the last place it was told. */
+void AfterDarkComponent::set_sky_latitude(float degrees) {
+  if (std::isfinite(degrees))
+    ::adcore::sky.lat = degrees;
+}
+void AfterDarkComponent::set_sky_longitude(float degrees) {
+  if (std::isfinite(degrees))
+    ::adcore::sky.lon = degrees;
+}
+void AfterDarkComponent::set_sky_weather(const std::string &condition) {
+  ::adcore::sky.weather = ::adcore::weather_from(condition);
 }
 #endif
 
@@ -204,7 +224,7 @@ void AfterDarkComponent::push_text_modulated_() {
        on from the end of the first two. */
     const uint8_t base = (r & 1 ? 0x40 : 0x00) + (r >= 2 ? text_.cols() : 0);
     for (int c = 0; c < text_.cols();) {
-      auto want = [&](int i) -> uint8_t { return blank && text_.dim(i, r) ? ' ' : text_.at(i, r); };
+      auto want = [&](int i) -> uint8_t { return blank ? text_.alt(i, r) : text_.at(i, r); };
       if (want(c) == panel_[r][c]) {
         c++;
         continue;
@@ -370,7 +390,8 @@ void AfterDarkComponent::loop() {
       count_subframe_(now);
     }
 #ifdef AD_USE_LCD
-    /* A character LCD's dim cells, blank every other pass. Its crystal is
+    /* A character LCD's dim cells blank every other pass (and blended ones
+       show their other code). Its crystal is
        slow, so 100 passes a second is plenty. */
     if (text_saver_ && subframes_ > 1 && !overlay_shown_ && now - sub_ms_ >= 10 && text_.any_dim()) {
       sub_ms_ = now;

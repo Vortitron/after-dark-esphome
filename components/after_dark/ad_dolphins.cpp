@@ -17,14 +17,18 @@
 #if defined(AD_SAVER_DOLPHINS) || defined(AD_ALL_SAVERS)
 #include "ad_core.h"
 #include "ad_text.h"
+#include "ad_sky.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
 namespace adcore {
 
-/* The time in the sky on a character LCD (the YAML's `clock: true`). */
+/* The time in the sky on a character LCD (the YAML's `clock: true`), and
+   the date taking turns with it (`date: true`). */
 bool dolphins_clock = false;
+bool dolphins_date = false;
 
 namespace {
 
@@ -849,15 +853,47 @@ const char *const POSE_DOWN[] = {
     ".....####",
     ".......##",
 };
-const char *const MOON[] = {
-    ".....",
+/* The sun and moon in the sky row, 5x5, set low or high in the cell. */
+const char *const SUN[] = {
+    "#.#.#",
     ".###.",
     "#####",
-    "#####",
-    "#####",
     ".###.",
-    ".....",
-    ".....",
+    "#.#.#",
+};
+
+/*
+ * The weather at the right of the sky, when it's more than the sun or a clear
+ * night: a glyph or two that take turns (the rain falling, the snow drifting).
+ */
+struct WeatherArt {
+  Weather w;
+  float every;  // seconds a frame
+  const char *const frames[2][8];
+};
+const WeatherArt WEATHER_ART[] = {
+    {WX_PARTLY, 2.0f, {{".....", ".....", "..##.", ".####", "#####", ".....", ".....", "....."},
+                       {".....", ".....", ".##..", "####.", "#####", ".....", ".....", "....."}}},
+    {WX_CLOUDY, 2.0f, {{".....", "..##.", ".####", "#####", ".....", ".##..", "####.", "....."},
+                       {".....", "..##.", ".####", "#####", ".....", ".##..", "####.", "....."}}},
+    {WX_FOG, 1.2f, {{".....", "####.", ".....", ".####", ".....", "####.", ".....", "....."},
+                    {".....", ".####", ".....", "####.", ".....", ".####", ".....", "....."}}},
+    {WX_RAIN, 0.4f, {{"..##.", ".####", "#####", ".....", "#..#.", ".....", ".#..#", "....."},
+                     {"..##.", ".####", "#####", ".....", ".....", "#..#.", ".....", ".#..#"}}},
+    {WX_POURING, 0.3f, {{"..##.", ".####", "#####", "#.#.#", ".#.#.", "#.#.#", ".#.#.", "#.#.#"},
+                        {"..##.", ".####", "#####", ".#.#.", "#.#.#", ".#.#.", "#.#.#", ".#.#."}}},
+    {WX_SNOW, 0.8f, {{"..##.", ".####", "#####", ".....", "#...#", ".....", "..#..", "....."},
+                     {"..##.", ".####", "#####", ".....", ".....", "#...#", ".....", "..#.."}}},
+    {WX_SLEET, 0.5f, {{"..##.", ".####", "#####", ".....", "#..#.", ".....", "..#.#", "....."},
+                      {"..##.", ".####", "#####", ".....", ".....", "#..#.", ".....", "..#.#"}}},
+    {WX_HAIL, 0.5f, {{"..##.", ".####", "#####", ".....", "#.#.#", ".....", ".#.#.", "....."},
+                     {"..##.", ".####", "#####", ".....", ".....", "#.#.#", ".....", ".#.#."}}},
+    {WX_STORM, 0.3f, {{"..##.", ".####", "#####", ".....", ".....", ".....", ".....", "....."},
+                      {"..##.", ".####", "#####", "...#.", "..#..", ".###.", "..#..", ".#..."}}},
+    {WX_WIND, 0.6f, {{".....", "###..", "...#.", "####.", ".....", "##...", "..#..", "....."},
+                     {".....", ".###.", "....#", ".####", ".....", ".##..", "...#.", "....."}}},
+    {WX_EXCEPTIONAL, 1.0f, {{"..#..", "..#..", "..#..", "..#..", ".....", "..#..", ".....", "....."},
+                            {"..#..", "..#..", "..#..", "..#..", ".....", "..#..", ".....", "....."}}},
 };
 
 class DolphinsText : public TextSaver {
@@ -867,28 +903,40 @@ class DolphinsText : public TextSaver {
     rows_ = t.rows();
     w_ = cols_ * 6 - 1;
     h_ = rows_ * 9 - 1;
-    /* The surface sits low in the bottom row; the moon high in the top,
-       clear of the clock (HH:MM at the left) when there is one. */
+    /* The surface sits low in the bottom row; the time (and the date) in
+       the top one. Without the real sky, a moon clear of the clock. */
     water_ = (rows_ - 1) * 9 + 4;
-    sky0_ = dolphins_clock && cols_ >= 12 ? 6 : 0;
-    moon_ = sky0_ + 2 + rng.below(cols_ - sky0_ - 4);
+    clock_ = dolphins_clock && cols_ >= 12;
+    date_ = clock_ && dolphins_date;
+    int sky0 = clock_ ? (date_ ? 11 : 6) : 0;
+    int room = cols_ - sky0 - 4;
+    moon_col_ = sky0 + 2 + rng.below(room > 1 ? room : 1);
+    moon_y_ = 1;
     for (int i = 0; i < 3; i++) {
-      star_col_[i] = sky0_ + rng.below(cols_ - sky0_);
+      star_col_[i] = rng.below(cols_);
       star_phase_[i] = rng.range(0, 6.28f);
     }
-    t_ = clock_ = 0;
+    t_ = tick_ = 0;
     leap_ = -1;
     wait_ = 0.5f;
     splash_t_ = 0;
+    showing_ = 0;
+    shown_t_ = 0;
+    fade_ = -1;
+    sky_at_ = -1;
+    real_ = false;
+    sun_col_ = -1;
+    text_[0][0] = text_[1][0] = 0;
+    x0_[0] = x0_[1] = 0;
     t.clear();
   }
 
   void frame(TextScreen &t, float dt) override {
-    clock_ += dt;
-    if (clock_ < 0.1f)
+    tick_ += dt;
+    if (tick_ < 0.1f)
       return;
-    float step = clock_ > 0.5f ? 0.5f : clock_;
-    clock_ = 0;
+    float step = tick_ > 0.5f ? 0.5f : tick_;
+    tick_ = 0;
     t_ += step;
 
     /* A dolphin at a time, with a breath between. */
@@ -900,16 +948,16 @@ class DolphinsText : public TextSaver {
         flight_ = rng.range(1.0f, 1.3f);
         speed_ = rng.range(26, 34);
         float span = speed_ * flight_;
-        x0_ = dir_ > 0 ? rng.range(4, w_ - span - 4) : rng.range(span + 4, w_ - 4);
+        x0_dolphin_ = dir_ > 0 ? rng.range(4, w_ - span - 4) : rng.range(span + 4, w_ - 4);
         if (span + 8 > w_)
-          x0_ = dir_ > 0 ? 2 : w_ - 2;
-        splash(x0_);
+          x0_dolphin_ = dir_ > 0 ? 2 : w_ - 2;
+        splash(x0_dolphin_);
       }
     } else {
       float before = leap_;
       leap_ += step;
       if (before < flight_ && leap_ >= flight_)
-        splash(x0_ + dir_ * speed_ * flight_);
+        splash(x0_dolphin_ + dir_ * speed_ * flight_);
       if (leap_ > flight_ + 0.6f) {
         leap_ = -1;
         wait_ = rng.range(0.8f, 2.5f);
@@ -918,37 +966,169 @@ class DolphinsText : public TextSaver {
     if (splash_t_ > 0)
       splash_t_ -= step;
 
-    clock_text_[0] = 0;
     Clock k;
-    if (sky0_ && local_time(k))
-      snprintf(clock_text_, sizeof clock_text_, "%02d:%02d", k.hour, k.minute);
+    const bool have_time = local_time(k);
+    update_sky(have_time, k);
+    update_text(have_time, k, step);
 
     memset(px_, 0, sizeof px_);
     int roll = (int) (t_ * 5) % 5;
     for (int c = 0; c < cols_; c++)
       wave(c * 6, roll);
     cell_bits(0, rows_ - 1, sea_);
-    draw(MOON, 8, 5, moon_ * 6, 0, false);
+    /* The sun and moon behind the time, the dolphin in front of them all. */
+    uint8_t code, other;
+    if (real_) {
+      if (moon_col_ >= 0 && !text_cell(moon_col_, code, other))
+        draw_moon(moon_col_ * 6, moon_y_);
+      if (sun_col_ >= 0 && !text_cell(sun_col_, code, other))
+        draw(SUN, 5, 5, sun_col_ * 6, sun_y_, false);
+    } else if (!text_cell(moon_col_, code, other)) {
+      draw_moon(moon_col_ * 6, moon_y_);
+    }
     if (leap_ >= 0 && leap_ < flight_ + 0.4f) {
       float u = leap_ / flight_;
-      float x = x0_ + dir_ * speed_ * leap_;
+      float x = x0_dolphin_ + dir_ * speed_ * leap_;
       float y = water_ - (water_ - 2) * 4 * u * (1 - u);
       const char *const *pose = u < 0.35f ? POSE_UP : u < 0.65f ? POSE_TOP : POSE_DOWN;
       int pw = (int) strlen(pose[0]), ph = pose == POSE_TOP ? 5 : 7;
       draw(pose, ph, pw, (int) lrintf(x) - pw / 2, (int) lrintf(y) - ph / 2, dir_ < 0);
     }
     if (splash_t_ > 0) {
-      int k = splash_t_ > 0.3f ? 0 : 1;
+      int s = splash_t_ > 0.3f ? 0 : 1;
       int sx = (int) splash_x_, sy = water_ - 1;
       const int DROPS[2][6][2] = {{{-2, -1}, {2, -1}, {-1, -3}, {1, -3}, {0, -2}, {0, 0}},
                                   {{-3, 0}, {3, 0}, {-2, -2}, {2, -2}, {0, -4}, {0, 0}}};
-      for (auto &d : DROPS[k])
+      for (auto &d : DROPS[s])
         set(sx + d[0], sy + d[1]);
     }
     compose(t);
   }
 
  private:
+  /* The weather glyph, or null on a clear day or night. */
+  const WeatherArt *weather_art() const {
+    for (const auto &a : WEATHER_ART)
+      if (a.w == sky.weather)
+        return &a;
+    return nullptr;
+  }
+  /* Columns the sun and moon cross: all but the weather's. */
+  int sky_cols() const { return cols_ - (weather_art() ? 1 : 0); }
+
+  /* Where the sun and moon are, every 20 seconds: right where they rose,
+     left where they set, higher in the cell the higher they are. */
+  void update_sky(bool have_time, const Clock &k) {
+    if (!have_time || !sky.located()) {
+      real_ = false;
+      return;
+    }
+    if (real_ && k.utc - sky_at_ < 20)
+      return;
+    sky_at_ = k.utc;
+    real_ = true;
+    Body sun, moon;
+    sun_and_moon((double) k.utc, sky.lat, sky.lon, sun, moon, lit_, waxing_);
+    night_ = sun.alt < -6;
+    const int n = sky_cols();
+    auto col = [n](const Body &b) { return (int) lrintf((1 - b.across) * (n - 1)); };
+    auto y = [](const Body &b) { return (int) lrintf(3 * (1 - b.height)); };
+    sun_col_ = sun.up ? col(sun) : -1;
+    sun_y_ = y(sun);
+    /* A new moon is the dark side: nothing to see. */
+    moon_col_ = moon.up && lit_ > 0.04f ? col(moon) : -1;
+    moon_y_ = y(moon);
+    if (moon_col_ >= 0 && moon_col_ == sun_col_)
+      moon_col_ = -1;  // the sun outshines it
+  }
+
+  /* The time, then the date, taking turns through white. */
+  void update_text(bool have_time, const Clock &k, float step) {
+    text_[0][0] = text_[1][0] = 0;
+    if (!clock_ || !have_time)
+      return;
+    snprintf(text_[0], sizeof text_[0], "%02d:%02d", k.hour, k.minute);
+    static const char *const DAY[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    static const char *const MON[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    const char *mon = MON[(k.month + 11) % 12];
+    if (cols_ >= 14)
+      snprintf(text_[1], sizeof text_[1], "%s %d %s", DAY[k.weekday % 7], k.day, mon);
+    else
+      snprintf(text_[1], sizeof text_[1], "%d %s", k.day, mon);
+    if (!date_) {
+      x0_[0] = place_text(0);
+      return;
+    }
+    if (fade_ >= 0) {
+      fade_ += step;
+      if (fade_ >= 3 * FADE_STEP) {
+        fade_ = -1;
+        showing_ ^= 1;
+        shown_t_ = 0;
+      }
+      return;
+    }
+    if (shown_t_ == 0)
+      x0_[showing_] = place_text(showing_);
+    shown_t_ += step;
+    if (shown_t_ >= (showing_ ? DATE_TIME : TIME_TIME)) {
+      fade_ = 0;
+      x0_[showing_ ^ 1] = place_text(showing_ ^ 1);
+    }
+  }
+
+  /* At the left, unless the right keeps the sun and moon in sight. */
+  int place_text(int i) const {
+    int len = (int) strlen(text_[i]);
+    int right = sky_cols() - len;
+    auto hides = [&](int x0) {
+      for (int b : {sun_col_, moon_col_})
+        if (b >= x0 && b < x0 + len)
+          return true;
+      return false;
+    };
+    if (!real_ || !hides(0) || right < 0 || hides(right))
+      return 0;
+    return right;
+  }
+
+  /* What the sky row shows in column c for the time or date, if anything:
+     both codes the same, or two to blend (where the panel can). */
+  bool text_cell(int c, uint8_t &code, uint8_t &other) const {
+    const char *a = text_[showing_];
+    if (!a[0])
+      return false;
+    auto at = [&](int i, int col, uint8_t &ch) {
+      int j = col - x0_[i];
+      if (j < 0 || j >= (int) strlen(text_[i]))
+        return false;
+      ch = (uint8_t) text_[i][j];
+      return true;
+    };
+    uint8_t ca = ' ', cb = ' ';
+    const bool in_a = at(showing_, c, ca);
+    if (fade_ < 0) {
+      code = other = ca;
+      return in_a;
+    }
+    const bool in_b = at(showing_ ^ 1, c, cb);
+    if (!in_a && !in_b)
+      return false;
+    const uint8_t WHITE = 0xFF;
+    int stage = (int) (fade_ / FADE_STEP);
+    if (stage == 0) {
+      code = ca;
+      other = WHITE;
+    } else if (stage == 1) {
+      code = other = WHITE;
+    } else {
+      code = WHITE;
+      other = cb;
+    }
+    return true;
+  }
+
   void splash(float x) {
     splash_x_ = x;
     splash_t_ = 0.6f;
@@ -978,18 +1158,37 @@ class DolphinsText : public TextSaver {
       px_[y][x] = 0;
   }
 
-  /* A pose, clearing the sea behind it; below the surface it stays hidden. */
+  /* A pose, clearing the sea (and sky) behind it; below the surface it stays
+     hidden. The sun is drawn the same way, high in the sky row. */
   void draw(const char *const *art, int h, int w, int x0, int y0, bool flip) {
+    const bool body = art == SUN;
     for (int j = 0; j < h; j++)
       for (int i = 0; i < w; i++) {
         char c = art[j][flip ? w - 1 - i : i];
         int x = x0 + i, y = y0 + j;
-        if (y > water_ && art != MOON)
+        if (y > water_ && !body)
           continue;
         if (c == '#')
           set(x, y);
-        else if (art != MOON && y < water_)
+        else if (!body && y < water_)
           clear(x, y);
+      }
+  }
+
+  /* The moon as it is tonight: lit on the right while it waxes (seen from
+     the north; the other way round south of the equator). */
+  void draw_moon(int x0, int y0) {
+    float lit = real_ ? lit_ : 1;
+    bool right = !real_ || (waxing_ == (sky.lat >= 0));
+    float edge = 1 - 2 * lit;  // the terminator, -1 (full) to 1 (new)
+    for (int y = 0; y < 5; y++)
+      for (int x = 0; x < 5; x++) {
+        float u = (x - 2) / 2.0f, v = (y - 2) / 2.0f;
+        if (u * u + v * v > 1.25f)
+          continue;
+        float half = sqrtf(fmaxf(0, 1 - v * v));
+        if ((right ? u : -u) >= edge * half - 0.3f)
+          set(x0 + x, y0 + y);
       }
   }
 
@@ -1004,11 +1203,24 @@ class DolphinsText : public TextSaver {
   }
 
   void compose(TextScreen &t) {
-    /* Glyph 0 is the plain sea; the rest go to cells that differ from it. */
+    /* Glyph 0 is the plain sea; the rest go to cells that differ from it,
+       the weather's last, so a dolphin never goes short. */
     const uint8_t *sea = sea_;
     t.glyph(0, sea);
     uint8_t used[TextScreen::GLYPHS][8];
     int slots = 1;
+    const WeatherArt *wx = weather_art();
+    bool wx_cell = false;
+    auto glyph_for = [&](const uint8_t bits[8]) {
+      for (int k = 1; k < slots; k++)
+        if (!memcmp(used[k], bits, 8))
+          return k;
+      if (slots >= TextScreen::GLYPHS)
+        return -1;
+      memcpy(used[slots], bits, 8);
+      t.glyph(slots, bits);
+      return slots++;
+    };
     for (int r = 0; r < rows_; r++)
       for (int c = 0; c < cols_; c++) {
         uint8_t bits[8];
@@ -1022,38 +1234,58 @@ class DolphinsText : public TextSaver {
           t.put(c, r, 0, true);
           continue;
         }
-        if (blank) {
-          /* The time in the sky, where nothing is in front of it. */
-          if (r == 0 && c < 5 && clock_text_[0]) {
-            t.put(c, r, clock_text_[c]);
+        if (blank && r == 0) {
+          uint8_t code, other;
+          if (text_cell(c, code, other)) {
+            t.blend(c, r, code, other);
+            continue;
+          }
+          if (wx && c == cols_ - 1) {
+            wx_cell = true;
             continue;
           }
           bool faint;
-          uint8_t s = star(c, r, faint);
+          uint8_t s = star(c, faint);
           t.put(c, r, s, faint);
           continue;
         }
-        int slot = -1;
-        for (int k = 1; k < slots; k++)
-          if (!memcmp(used[k], bits, 8))
-            slot = k;
-        if (slot < 0 && slots < TextScreen::GLYPHS) {
-          slot = slots++;
-          memcpy(used[slot], bits, 8);
-          t.glyph(slot, bits);
+        if (blank) {
+          t.put(c, r, ' ');
+          continue;
         }
+        int slot = glyph_for(bits);
         t.put(c, r, slot < 0 ? (r == rows_ - 1 ? 0 : ' ') : slot);
       }
+    if (wx_cell) {
+      int frame = (int) (t_ / wx->every) & 1;
+      /* A storm's lightning comes now and then, not every other beat. */
+      if (wx->w == WX_STORM)
+        frame = fmodf(t_, 2.7f) < 0.3f;
+      uint8_t bits[8];
+      glyph_from_art(wx->frames[frame], 0, bits);
+      int slot = glyph_for(bits);
+      t.put(cols_ - 1, 0, slot < 0 ? ' ' : slot);
+    }
   }
 
-  /* A few stars in the top row, coming and going: faint (dim, where the
-     panel can do it) on the way in and out. */
-  uint8_t star(int c, int r, bool &faint) const {
+  /* A few stars in the top row on a clear night, coming and going: faint
+     (dim, where the panel can do it) on the way in and out. */
+  uint8_t star(int c, bool &faint) const {
     faint = false;
-    if (r != 0)
+    if (real_ && !night_)
       return ' ';
+    switch (sky.weather) {
+      case WX_UNKNOWN:
+      case WX_SUNNY:
+      case WX_CLEAR_NIGHT:
+      case WX_PARTLY:
+      case WX_WIND:
+        break;
+      default:
+        return ' ';  // clouded over
+    }
     for (int i = 0; i < 3; i++)
-      if (star_col_[i] == c && c != moon_) {
+      if (star_col_[i] == c) {
         float s = sinf(t_ * 1.3f + star_phase_[i]);
         faint = s < 0.35f;
         return s > -0.3f ? (i == 1 ? '\'' : '.') : ' ';
@@ -1061,13 +1293,25 @@ class DolphinsText : public TextSaver {
     return ' ';
   }
 
-  int cols_ = 16, rows_ = 2, w_ = 0, h_ = 0, water_ = 0, moon_ = 0, sky0_ = 0;
-  char clock_text_[8] = {};
+  /* Seconds the time and the date each stay, and each of the three steps of
+     the fade between them (into white, white, out of it). */
+  static constexpr float TIME_TIME = 9, DATE_TIME = 4, FADE_STEP = 0.25f;
+
+  int cols_ = 16, rows_ = 2, w_ = 0, h_ = 0, water_ = 0;
+  bool clock_ = false, date_ = false;
+  char text_[2][16] = {};
+  int x0_[2] = {0, 0};
+  int showing_ = 0;
+  float shown_t_ = 0, fade_ = -1;
+  bool real_ = false, night_ = true, waxing_ = true;
+  long long sky_at_ = -1;
+  float lit_ = 1;
+  int sun_col_ = -1, sun_y_ = 0, moon_col_ = 0, moon_y_ = 1;
   uint8_t px_[TextScreen::MAX_ROWS * 9][TextScreen::MAX_COLS * 6];
   uint8_t sea_[8];
   int star_col_[3];
   float star_phase_[3];
-  float t_ = 0, clock_ = 0, leap_ = -1, wait_ = 0, flight_ = 1, speed_ = 16, x0_ = 0;
+  float t_ = 0, tick_ = 0, leap_ = -1, wait_ = 0, flight_ = 1, speed_ = 16, x0_dolphin_ = 0;
   int dir_ = 1;
   float splash_x_ = 0, splash_t_ = 0;
 };

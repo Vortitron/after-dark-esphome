@@ -856,7 +856,7 @@ class Shell {
           /* No clock: from the BIOS date, 10:10:00. */
           long s = 10 * 3600 + 10 * 60 + (long) t_;
           int days = (int) (s / 86400);
-          k = {1994, 3, 25 + days, (5 + days) % 7, (int) (s / 3600 % 24), (int) (s / 60 % 60), (int) (s % 60)};
+          k = {1994, 3, 25 + days, (5 + days) % 7, (int) (s / 3600 % 24), (int) (s / 60 % 60), (int) (s % 60), 0};
           static const uint8_t MONTH[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
           while (k.day > MONTH[k.month - 1]) {
             k.day -= MONTH[k.month - 1];

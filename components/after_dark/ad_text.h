@@ -24,12 +24,17 @@ class TextScreen {
      (lit every other pass, which a slow liquid crystal averages), and as
      any other where it doesn't. */
   void put(int col, int row, uint8_t code, bool dim = false);
+  /* Half one code, half another, the same way (as `code` where the panel
+     can't): a character fading into another. */
+  void blend(int col, int row, uint8_t code, uint8_t other);
   /* Five bits a row (bit 4 is the left column), top row first. */
   void glyph(int slot, const uint8_t bits[8]);
 
   /* For whatever drives the panel. */
   uint8_t at(int col, int row) const { return chars_[row][col]; }
-  bool dim(int col, int row) const { return dim_[row][col]; }
+  /* What a modulated cell shows on the odd passes (its own code if it isn't
+     one). */
+  uint8_t alt(int col, int row) const { return alt_[row][col]; }
   bool any_dim() const;
   const uint8_t *glyph_bits(int slot) const { return glyphs_[slot]; }
   bool glyph_changed(int slot) const { return glyph_dirty_ & (1 << slot); }
@@ -42,7 +47,7 @@ class TextScreen {
  private:
   int cols_ = 16, rows_ = 2;
   uint8_t chars_[MAX_ROWS][MAX_COLS];
-  bool dim_[MAX_ROWS][MAX_COLS];
+  uint8_t alt_[MAX_ROWS][MAX_COLS];
   uint8_t sent_[MAX_ROWS][MAX_COLS];
   uint8_t glyphs_[GLYPHS][8];
   uint8_t glyph_dirty_ = 0xFF;

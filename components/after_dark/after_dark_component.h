@@ -106,6 +106,11 @@ class AfterDarkComponent : public Component {
   /* Frame-rate modulation on a 1-bit panel: 2-4 subframes (1 is off). The
      screen is then rewritten as fast as it goes between the saver's frames.
      Only the savers that draw in-between shades change. */
+  /* The dolphins' sky on a character LCD: where the panel is (degrees) and
+     the weather (Home Assistant's condition names). */
+  void set_sky_latitude(float degrees);
+  void set_sky_longitude(float degrees);
+  void set_sky_weather(const std::string &condition);
   void set_frame_rate_modulation(int subframes);
   int get_frame_rate_modulation() const { return subframes_; }
   /* How many subframes it uses when on (what the YAML asked for, or 2). */

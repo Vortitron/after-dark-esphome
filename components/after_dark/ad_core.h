@@ -159,6 +159,7 @@ struct Clock {
   int year, month, day;  // month 1-12, day 1-31
   int weekday;           // 0 = Sunday
   int hour, minute, second;
+  long long utc;  // seconds since 1970
 };
 extern bool (*time_source)(Clock &out);
 inline bool local_time(Clock &out) { return time_source != nullptr && time_source(out); }

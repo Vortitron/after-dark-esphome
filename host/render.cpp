@@ -14,6 +14,7 @@
  */
 #include "../components/after_dark/ad_core.h"
 #include "../components/after_dark/ad_text.h"
+#include "../components/after_dark/ad_sky.h"
 #include "../components/after_dark/ad_live.h"
 #include "font5x8.h"
 
@@ -29,6 +30,7 @@ using namespace adcore;
 
 namespace adcore {
 extern bool dolphins_clock;  // AD_DOLPHINS_CLOCK=1
+extern bool dolphins_date;   // AD_DOLPHINS_DATE=1
 }
 
 class HostSurface : public Surface {
@@ -122,7 +124,7 @@ bool host_time(Clock &c) {
   time_t t = clock_start + (time_t) clock_elapsed;
   struct tm tm;
   localtime_r(&t, &tm);
-  c = {tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_wday, tm.tm_hour, tm.tm_min, tm.tm_sec};
+  c = {tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_wday, tm.tm_hour, tm.tm_min, tm.tm_sec, (long long) t};
   return true;
 }
 
@@ -144,12 +146,14 @@ bool write_lcd(const TextScreen &t, const char *path) {
   }
   for (int r = 0; r < t.rows(); r++)
     for (int c = 0; c < t.cols(); c++) {
-      uint8_t code = t.at(c, r);
+      uint8_t code = t.at(c, r), other = t.alt(c, r);
       const uint8_t *bits = code < 8 ? t.glyph_bits(code) : FONT5X8[code];
-      const bool half = getenv("AD_FRM") && atoi(getenv("AD_FRM")) > 1 && t.dim(c, r);
+      const bool frm = getenv("AD_FRM") && atoi(getenv("AD_FRM")) > 1;
+      const uint8_t *alt_bits = !frm ? bits : other < 8 ? t.glyph_bits(other) : FONT5X8[other];
       for (int y = 0; y < 8; y++)
         for (int x = 0; x < 5; x++) {
-          bool on = bits[y] & (0x10 >> x);
+          bool a = bits[y] & (0x10 >> x), b = alt_bits[y] & (0x10 >> x);
+          bool on = a || b, half = a != b;
           for (int j = 0; j < D - 1; j++)
             for (int i = 0; i < D - 1; i++) {
               uint8_t *p = &rgb[((B + r * CH + y * D + j) * w + B + c * CW + x * D + i) * 3];
@@ -285,6 +289,12 @@ int main(int argc, char **argv) {
       shell_demo();
   }
   dolphins_clock = getenv("AD_DOLPHINS_CLOCK") != nullptr;
+  dolphins_date = getenv("AD_DOLPHINS_DATE") != nullptr;
+  /* The dolphins' real sky: AD_SKY=lat,lon and AD_WEATHER=rainy (HA's names). */
+  if (getenv("AD_SKY"))
+    sscanf(getenv("AD_SKY"), "%f,%f", &sky.lat, &sky.lon);
+  if (getenv("AD_WEATHER"))
+    sky.weather = weather_from(getenv("AD_WEATHER"));
   if (getenv("AD_EVERY"))
     every = atoi(getenv("AD_EVERY")) > 0 ? atoi(getenv("AD_EVERY")) : 1;
   clock_start = getenv("AD_TIME") ? (time_t) atoll(getenv("AD_TIME")) : time(nullptr);

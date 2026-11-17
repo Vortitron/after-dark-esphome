@@ -15,13 +15,13 @@ void TextScreen::begin(int cols, int rows) {
 
 void TextScreen::clear() {
   memset(chars_, ' ', sizeof chars_);
-  memset(dim_, 0, sizeof dim_);
+  memset(alt_, ' ', sizeof alt_);
 }
 
 bool TextScreen::any_dim() const {
   for (int r = 0; r < rows_; r++)
     for (int c = 0; c < cols_; c++)
-      if (dim_[r][c] && chars_[r][c] != ' ')
+      if (alt_[r][c] != chars_[r][c])
         return true;
   return false;
 }
@@ -39,7 +39,14 @@ void TextScreen::put(int col, int row, uint8_t code, bool dim) {
   if (col < 0 || row < 0 || col >= cols_ || row >= rows_)
     return;
   chars_[row][col] = code;
-  dim_[row][col] = dim;
+  alt_[row][col] = dim ? ' ' : code;
+}
+
+void TextScreen::blend(int col, int row, uint8_t code, uint8_t other) {
+  if (col < 0 || row < 0 || col >= cols_ || row >= rows_)
+    return;
+  chars_[row][col] = code;
+  alt_[row][col] = other;
 }
 
 void TextScreen::glyph(int slot, const uint8_t bits[8]) {

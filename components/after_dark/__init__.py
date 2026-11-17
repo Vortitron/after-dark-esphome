@@ -22,8 +22,17 @@ Saver options (see SAVER_OPTIONS):
   clocks:  face - melting_digital, classic, modern, art_deco or mutating.
            Default: mutating (ten photographs, 189 KB) on colour,
            melting_digital on a 1-bit panel.
-  dolphins: clock - true shows the time (HH:MM) in the sky on a character
-           LCD, a dolphin leaping in front of it (needs time_id).
+  dolphins: on a character LCD (each needs time_id):
+           clock - true shows the time (HH:MM) in the sky, a dolphin leaping
+             in front of it;
+           date - true has the date take turns with it, through white;
+           latitude, longitude - degrees, or sensors giving them (Home
+             Assistant's zone.home has both as attributes): the real sun
+             and moon cross the sky, rising at the right, the moon in its
+             phase, and the stars come out only at night;
+           weather - a text sensor with Home Assistant's conditions (rainy,
+             cloudy...): a glyph at the right of the sky for all but a
+             clear one, and no stars when it's clouded over.
   dosshell: commands - typed instead of DIR and the rest, each answered with
            a line per Home Assistant entity (needs `api:`):
              - dosshell:
@@ -71,9 +80,9 @@ from esphome import automation
 import esphome.codegen as cg
 import esphome.config_validation as cv
 import esphome.final_validate as fv
-from esphome.components import display
+from esphome.components import display, sensor, text_sensor
 from esphome.const import CONF_DIMENSIONS, CONF_ID, CONF_TIME_ID
-from esphome.core import CORE
+from esphome.core import CORE, ID
 
 CODEOWNERS = ["@Vortitron"]
 
@@ -150,7 +159,15 @@ SAVER_OPTIONS = {
         }
     ),
     "clocks": cv.Schema({cv.Optional("face"): cv.one_of(*CLOCKS_FACES, lower=True, space="_")}),
-    "dolphins": cv.Schema({cv.Optional("clock", default=False): cv.boolean}),
+    "dolphins": cv.Schema(
+        {
+            cv.Optional("clock", default=False): cv.boolean,
+            cv.Optional("date", default=False): cv.boolean,
+            cv.Optional("latitude"): cv.Any(cv.float_range(min=-90, max=90), cv.use_id(sensor.Sensor)),
+            cv.Optional("longitude"): cv.Any(cv.float_range(min=-180, max=360), cv.use_id(sensor.Sensor)),
+            cv.Optional("weather"): cv.use_id(text_sensor.TextSensor),
+        }
+    ),
     "dosshell": cv.Schema(
         {
             cv.Optional("commands"): cv.All(
@@ -356,6 +373,31 @@ async def after_dark_condition_to_code(config, condition_id, template_arg, args)
     return var
 
 
+async def _dolphins_to_code(var, options):
+    """The dolphins' sky on a character LCD: the clock, and the real sun, moon
+    and weather from the YAML's sensors."""
+    for flag in ("clock", "date"):
+        if options.get(flag):
+            cg.add_global(cg.RawStatement(f"namespace adcore {{ extern bool dolphins_{flag}; }}"))
+            cg.add(cg.RawExpression(f"::adcore::dolphins_{flag} = true"))
+    for key in ("latitude", "longitude"):
+        if key not in options:
+            continue
+        setter = f"set_sky_{key}"
+        if isinstance(options[key], ID):
+            source = await cg.get_variable(options[key])
+            cg.add(source.add_on_state_callback(cg.RawExpression(f"[](float x) {{ {var}->{setter}(x); }}")))
+        else:
+            cg.add(getattr(var, setter)(options[key]))
+    if "weather" in options:
+        source = await cg.get_variable(options["weather"])
+        cg.add(
+            source.add_on_state_callback(
+                cg.RawExpression(f"[](const std::string &s) {{ {var}->set_sky_weather(s); }}")
+            )
+        )
+
+
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
@@ -404,9 +446,8 @@ async def to_code(config):
                 cg.add_build_flag(f"-DAD_FISHPRO_{fish.upper()}")
         elif saver == "clocks" and "face" in options:
             cg.add_build_flag(f"-DAD_CLOCKS_TYPE={CLOCKS_FACES.index(options['face'])}")
-        elif saver == "dolphins" and options.get("clock"):
-            cg.add_global(cg.RawStatement("namespace adcore { extern bool dolphins_clock; }"))
-            cg.add(cg.RawExpression("::adcore::dolphins_clock = true"))
+        elif saver == "dolphins":
+            await _dolphins_to_code(var, options)
         elif saver == "dosshell":
             if options.get("commands"):
                 cg.add_build_flag("-DAD_SHELL_LIVE")
