@@ -23,12 +23,13 @@
  *   blend worked out over the sea colour, and Sheet water (45% sea over
  *   whatever is behind) is taken over black, as there is no reading back.
  * On a 1-bit panel the colours go through the ordered dither, which keeps the
- * facets' shading. No character-LCD version: 17 dots of height is no
- * landscape.
+ * facets' shading. On a character LCD (MountainsText) the landscape is two
+ * ridges and the water seen from the side, a column of dots a cell; see there.
  */
 #if defined(AD_SAVER_MOUNTAINS) || defined(AD_ALL_SAVERS)
 #include "ad_core.h"
 #include "ad_draw.h"
+#include "ad_text.h"
 
 #include <algorithm>
 #include <cmath>
@@ -341,11 +342,125 @@ class Mountains : public Saver {
   float due_ = 0, rest_ = 0;
 };
 
+
+/*
+ * On a character LCD: two ranges of peaks, side on. A peak is drawn as text
+ * art draws one, a slope up and a slope down each row with solid rock
+ * between, so three glyphs (up, down, and both where two peaks meet) with the
+ * ROM's full block draw any number. Where the panel shows dim cells a cell
+ * blends two codes: the far range dim behind the near one. A landscape rises
+ * from the back, the far range then the near, a column at a time, and stays
+ * half a minute under a moon and a few faint stars before the next.
+ */
+const char *const LCD_MOON[8] = {"..##.", ".#...", "#....", "#....", ".#...", "..##.", ".....", "....."};
+enum { G_UP, G_DOWN, G_VEE, G_MOON = 7 };
+
+class MountainsText : public TextSaver {
+ public:
+  void start(TextScreen &t) override {
+    cols_ = t.cols();
+    rows_ = t.rows();
+    for (int y = 0; y < 8; y++) {
+      up_[y] = down_[y] = 0;
+      for (int x = 0; x < 5; x++) {
+        /* Below the line from the cell's bottom left to its top right. */
+        if ((x + 0.5f) / 5 >= (7.5f - y) / 8)
+          up_[y] |= 0x10 >> x;
+        if ((4 - x + 0.5f) / 5 >= (7.5f - y) / 8)
+          down_[y] |= 0x10 >> x;
+      }
+    }
+    uint8_t vee[8], moon[8];
+    for (int y = 0; y < 8; y++)
+      vee[y] = up_[y] | down_[y];
+    t.glyph(G_UP, up_);
+    t.glyph(G_DOWN, down_);
+    t.glyph(G_VEE, vee);
+    glyph_from_art(LCD_MOON, 0, moon);
+    t.glyph(G_MOON, moon);
+    landscape();
+  }
+
+  void frame(TextScreen &t, float dt) override {
+    t_ += dt;
+    if (t_ >= RISE + HOLD) {
+      landscape();
+      t_ = 0;
+    }
+    /* Columns up so far: the far range over the first half of the rise. */
+    int far_up = (int) (t_ / RISE * 2 * cols_), near_up = far_up - cols_;
+    const bool depth = t.dimmable();
+    for (int r = 0; r < rows_; r++)
+      for (int c = 0; c < cols_; c++) {
+        uint8_t f = c < far_up ? far_[r][c] : 0, n = c < near_up ? near_[r][c] : 0;
+        uint8_t all = f | n;
+        if (!all) {
+          if (r == 0 && c == moon_)
+            t.put(c, r, G_MOON);
+          else
+            t.put(c, r, star_[r][c] ? '.' : ' ', true);
+          continue;
+        }
+        t.blend(c, r, code(all), depth ? code(n) : code(all));
+      }
+  }
+
+ private:
+  static constexpr float RISE = 2.5f, HOLD = 30;
+  /* What a cell holds, as bits: 1 slope up, 2 slope down, 4 solid. */
+  static uint8_t code(uint8_t m) {
+    return m & 4 ? 0xFF : m == 3 ? (uint8_t) G_VEE : m == 1 ? (uint8_t) G_UP : m == 2 ? (uint8_t) G_DOWN : (uint8_t) ' ';
+  }
+
+  /* A peak between columns p-1 and p, h rows tall. */
+  static void peak(uint8_t (*layer)[TextScreen::MAX_COLS], int cols, int rows, int p, int h) {
+    for (int i = 0; i < h; i++) {
+      int r = rows - h + i;
+      auto mark = [&](int c, uint8_t m) {
+        if (c >= 0 && c < cols)
+          layer[r][c] |= m;
+      };
+      mark(p - 1 - i, 1);
+      mark(p + i, 2);
+      for (int c = p - i; c < p + i; c++)
+        mark(c, 4);
+    }
+  }
+
+  void landscape() {
+    for (int r = 0; r < TextScreen::MAX_ROWS; r++)
+      for (int c = 0; c < TextScreen::MAX_COLS; c++) {
+        far_[r][c] = near_[r][c] = 0;
+        star_[r][c] = r < rows_ - 1 && rng.below(6) == 0;
+      }
+    /* The far range: tall peaks, close together; the near one lower. */
+    for (int p = rng.below(3); p <= cols_; p += 2 + rng.below(4))
+      peak(far_, cols_, rows_, p, rows_ - (rows_ > 2 ? rng.below(2) : 0));
+    for (int p = 1 + rng.below(4); p <= cols_; p += 3 + rng.below(5))
+      peak(near_, cols_, rows_, p, 1 + (rows_ > 2 ? rng.below(rows_ - 2) : 0));
+    /* The moon over a gap in the far range. */
+    moon_ = -1;
+    for (int tries = 0; tries < 8 && moon_ < 0; tries++) {
+      int c = rng.below(cols_);
+      if (!far_[0][c])
+        moon_ = c;
+    }
+  }
+
+  int cols_ = 16, rows_ = 2;
+  uint8_t up_[8], down_[8];
+  uint8_t far_[TextScreen::MAX_ROWS][TextScreen::MAX_COLS], near_[TextScreen::MAX_ROWS][TextScreen::MAX_COLS];
+  bool star_[TextScreen::MAX_ROWS][TextScreen::MAX_COLS];
+  int moon_ = -1;
+  float t_ = 0;
+};
+
 }  // namespace
 
 Saver *make_mountains() { return new Mountains(); }
+TextSaver *make_mountains_text() { return new MountainsText(); }
 
-AD_REGISTER_SAVER("mountains", make_mountains, nullptr)
+AD_REGISTER_SAVER("mountains", make_mountains, make_mountains_text)
 
 }  // namespace adcore
 #endif

@@ -25,11 +25,12 @@
  * Caps Lock's change of colours has no key here.
  *
  * On a 1-bit panel the palette goes through the ordered dither, which keeps
- * the bands; there is no character-LCD version (the set is ~20 dots across
- * on a 1602's dot grid, and the dithered bands don't survive composing).
+ * the bands. On a character LCD (MandelbrotText) it is drawn in blocks, a
+ * cell split into thirds; see there.
  */
 #if defined(AD_SAVER_MANDELBROT) || defined(AD_ALL_SAVERS)
 #include "ad_core.h"
+#include "ad_text.h"
 
 #include <algorithm>
 #include <cmath>
@@ -236,11 +237,101 @@ class Mandelbrot : public Saver {
   float shown_ = 0;
 };
 
+
+/*
+ * On a character LCD: a slow, endless zoom drawn in blocks, each cell split
+ * into thirds top to bottom (six glyphs make every pattern of them, with the
+ * blank and the ROM's full block), so a 1602 is 16x6 blocks. Where the panel
+ * shows dim cells a cell blends two patterns, and each block is off, dim or
+ * lit: the set dark as it always is, its edge lit and the glow round it dim. Each block is the
+ * average of a few points. Every half minute or so, a new dive.
+ */
+class MandelbrotText : public TextSaver {
+ public:
+  void start(TextScreen &t) override {
+    cols_ = t.cols();
+    rows_ = t.rows();
+    for (int m = 1; m < 7; m++) {
+      uint8_t bits[8];
+      for (int y = 0; y < 8; y++)
+        bits[y] = m & (1 << (y < 3 ? 0 : y < 6 ? 1 : 2)) ? 0x1F : 0;
+      t.glyph(m - 1, bits);
+    }
+    dive();
+  }
+
+  void frame(TextScreen &t, float dt) override {
+    clock_ += dt;
+    if (clock_ < 0.25f)
+      return;
+    t_ += clock_;
+    clock_ = 0;
+    if (t_ > DIVE)
+      dive();
+    /* Zooming out to in, by 2,000 times over the dive. */
+    double span = START * exp(-t_ / DIVE * log(START / END));
+    int max = 40 + (int) (t_ / DIVE * 200);
+    /* Blocks are 6 dots by 3, so the view is that shape. */
+    const int bw = cols_, bh = rows_ * 3;
+    double px = span / bw, py = px / 2;
+    const bool depth = t.dimmable();
+    uint8_t level[TextScreen::MAX_ROWS * 3][TextScreen::MAX_COLS];
+    long work = 0;
+    for (int j = 0; j < bh; j++)
+      for (int i = 0; i < bw; i++) {
+        int sum = 0;
+        for (int k = 0; k < 4; k++) {
+          double x = cx_ + (i - bw / 2.0 + 0.25 + 0.5 * (k & 1)) * px;
+          double y = cy_ + (j - bh / 2.0 + 0.25 + 0.5 * (k >> 1)) * py;
+          int n = escape(fx(x), fx(y), max, work);
+          sum += n < 0 ? 0 : n > max / 6 ? 2 : n > max / 24 ? 1 : 0;
+        }
+        level[j][i] = (uint8_t) ((sum + 2) / 4);
+      }
+    for (int r = 0; r < rows_; r++)
+      for (int c = 0; c < cols_; c++) {
+        uint8_t some = 0, full = 0;
+        for (int k = 0; k < 3; k++) {
+          uint8_t v = level[r * 3 + k][c];
+          if (v >= 1)
+            some |= 1 << k;
+          if (v >= 2)
+            full |= 1 << k;
+        }
+        if (!depth)
+          full = some;
+        t.blend(c, r, code(some), code(full));
+      }
+  }
+
+ private:
+  static constexpr double START = 3.2, END = 0.0016;
+  static constexpr float DIVE = 32;
+  static uint8_t code(uint8_t m) { return m == 0 ? ' ' : m == 7 ? 0xFF : (uint8_t) (m - 1); }
+
+  void dive() {
+    /* Spots on the edge with something to see all the way down. */
+    static const double SPOTS[][2] = {
+        {-0.743643887, 0.131825904}, {-0.7453, 0.1127}, {0.2925, 0.0149},  {-1.25066, 0.02012},
+        {-0.1592, 1.0317},           {-0.77568, 0.13646}, {-1.7687, 0.0017}, {0.3245, 0.0425},
+    };
+    const double *p = SPOTS[rng.below(sizeof SPOTS / sizeof SPOTS[0])];
+    cx_ = p[0];
+    cy_ = p[1];
+    t_ = 0;
+  }
+
+  int cols_ = 16, rows_ = 2;
+  double cx_ = -0.5, cy_ = 0;
+  float t_ = 0, clock_ = 1;
+};
+
 }  // namespace
 
 Saver *make_mandelbrot() { return new Mandelbrot(); }
+TextSaver *make_mandelbrot_text() { return new MandelbrotText(); }
 
-AD_REGISTER_SAVER("mandelbrot", make_mandelbrot, nullptr)
+AD_REGISTER_SAVER("mandelbrot", make_mandelbrot, make_mandelbrot_text)
 
 }  // namespace adcore
 #endif
