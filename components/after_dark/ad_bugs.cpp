@@ -28,7 +28,13 @@
  * On a 1-bit panel the bugs are the baked art at 1/2, 1/3 or 1/4 size to suit
  * the screen (as ad_toasters.cpp chooses), with speeds and the wrap margin
  * shrunk to match and fewer of them (35 at a third size would be a carpet).
- * No character LCD version: a bug turning in one 5x8 cell is not the module.
+ * On a character LCD a bug turning in a 5x8 cell is not the module, so there
+ * it is the module's other way, with Clear screen first off: a few bugs walk
+ * the rows a dot at a time, legs going, and eat whatever is on the screen
+ * (DOS Shell's text, say), a column of a character at a time. Each bug is two
+ * glyphs, the character it is eating drawn under it from a 5x8 font close to
+ * the panel's own. They wander off one edge and come back along another row;
+ * when there is nothing left, a fresh directory listing is put out for them.
  */
 #if defined(AD_SAVER_BUGS) || defined(AD_ALL_SAVERS)
 #include "ad_art.h"
@@ -41,6 +47,11 @@
 #include "ad_art_bugs_m4.h"
 #endif
 
+#include "ad_font.h"
+#include "ad_font_5x8.h"
+#include "ad_text.h"
+
+#include <cstdio>
 #include <vector>
 
 namespace adcore {
@@ -285,11 +296,229 @@ class Bugs : public Saver {
   std::vector<uint8_t> buf_;
 };
 
+/* Facing right, two steps of the legs; rows top first, '#' lit. Mirrored for
+   left. */
+struct LcdBug {
+  uint8_t h;
+  const char *rows[2][5];
+};
+const LcdBug LCD_BUGS[] = {
+    {3, {{"#.#..", ".####", "#.#.."}, {".#.#.", ".####", ".#.#."}}},  // an ant
+    {5, {{"#.#..", ".###.", "#####", ".###.", "#.#.."}, {".#.#.", ".###.", "#####", ".###.", ".#.#."}}},  // a beetle
+    {4, {{"#..#.", "####.", ".####", "#..#."}, {".#..#", "####.", ".####", ".#..#"}}},  // a roach
+};
+
+const char *const LISTING[] = {
+    "C:\\>DIR",        "AUTOEXEC BAT",  "CONFIG   SYS",  "COMMAND  COM",  "AFTERDRK EXE",
+    "WIN      COM",    "README   TXT",  "LOFT     CFG",  "12 file(s)",    "C:\\>",
+    "MOUSE    SYS",    "HIMEM    SYS",  "BUGS     AD",   "FISH     AD",   "TOASTERS AD",
+};
+
+class BugsText : public TextSaver {
+ public:
+  void start(TextScreen &t) override {
+    cols_ = t.cols();
+    rows_ = t.rows();
+    int printable = 0;
+    for (int r = 0; r < rows_; r++)
+      for (int c = 0; c < cols_; c++) {
+        uint8_t ch = t.at(c, r);
+        /* A saver's own glyphs mean nothing once it has gone. */
+        screen_[r][c] = ch < 0x20 ? ' ' : ch;
+        printable += screen_[r][c] != ' ';
+      }
+    if (printable < 4)
+      listing();
+    int n = std::min(MAX_BUGS, 1 + cols_ / 6);
+    bugs_n_ = n;
+    for (int i = 0; i < n; i++) {
+      enter(bugs_[i]);
+      bugs_[i].wait = i * rng.range(1.5f, 3);  // not all at once
+    }
+    empty_for_ = 0;
+  }
+
+  void frame(TextScreen &t, float dt) override {
+    const int W = cols_ * 6 - 1;
+    for (int i = 0; i < bugs_n_; i++) {
+      Bug &b = bugs_[i];
+      if (b.wait > 0) {
+        b.wait -= dt;
+        if (b.wait <= 0)
+          enter(b);
+        continue;
+      }
+      b.due += dt * b.speed;
+      while (b.due >= 1 && b.wait <= 0) {
+        b.due -= 1;
+        step(b, i, W);
+      }
+    }
+    /* Nothing left: a fresh listing after a while. */
+    bool any = false;
+    for (int r = 0; r < rows_ && !any; r++)
+      for (int c = 0; c < cols_; c++)
+        if (screen_[r][c] != ' ') {
+          any = true;
+          break;
+        }
+    empty_for_ = any ? 0 : empty_for_ + dt;
+    if (empty_for_ > 6) {
+      listing();
+      empty_for_ = 0;
+    }
+    draw(t);
+  }
+
+ private:
+  static const int MAX_BUGS = 4;
+  struct Bug {
+    int kind, row, y, x;  // x: the sprite's left dot, across the panel
+    int dir;  // +1 right, -1 left
+    int legs;
+    float speed, due, wait;
+  };
+
+  void listing() {
+    for (int r = 0; r < rows_; r++) {
+      const char *line = LISTING[rng.below(sizeof LISTING / sizeof LISTING[0])];
+      for (int c = 0; c < cols_; c++)
+        screen_[r][c] = ' ';
+      for (int c = 0; c < cols_ && line[c]; c++)
+        screen_[r][c] = (uint8_t) line[c];
+    }
+    for (int r = 0; r < rows_; r++)
+      for (int c = 0; c < cols_; c++)
+        eaten_[r][c] = 0;
+  }
+
+  /* From the left or right edge, along any row. */
+  void enter(Bug &b) {
+    b.kind = rng.below(3);
+    b.row = rng.below(rows_);
+    b.y = rng.below(8 - LCD_BUGS[b.kind].h + 1);
+    b.dir = rng.below(2) ? 1 : -1;
+    b.x = b.dir > 0 ? -5 : cols_ * 6;
+    b.legs = 0;
+    b.speed = rng.range(3, 7);
+    b.due = 0;
+    b.wait = 0;
+  }
+
+  /* The cells a bug at x covers: one or two. */
+  static void cells(int x, int &c0, int &c1) {
+    c0 = (x + 6) / 6 - 1;  // floor
+    c1 = (x + 4 + 6) / 6 - 1;
+  }
+
+  bool blocked(int self, int row, int c) const {
+    for (int j = 0; j < bugs_n_; j++) {
+      const Bug &o = bugs_[j];
+      if (j == self || o.wait > 0 || o.row != row)
+        continue;
+      int a, b;
+      cells(o.x, a, b);
+      if (c == a || c == b)
+        return true;
+    }
+    return false;
+  }
+
+  void finish_off(int row, int c) {
+    if (c >= 0 && c < cols_ && eaten_[row][c]) {
+      screen_[row][c] = ' ';
+      eaten_[row][c] = 0;
+    }
+  }
+
+  void step(Bug &b, int self, int W) {
+    int nx = b.x + b.dir;
+    int head = b.dir > 0 ? nx + 4 : nx;
+    int hc = head < 0 ? -1 : head / 6;
+    int c0, c1;
+    cells(b.x, c0, c1);
+    /* Into another bug, or now and then at a cell's edge: turn round. */
+    bool edge = (b.dir > 0 ? (b.x + 4) % 6 == 4 : b.x % 6 == 0) && b.x >= 0 && b.x + 4 < W;
+    if ((hc >= 0 && hc < cols_ && hc != c0 && hc != c1 && blocked(self, b.row, hc)) ||
+        (edge && rng.below(40) == 0)) {
+      b.dir = -b.dir;
+      finish_off(b.row, c0);
+      finish_off(b.row, c1);
+      return;
+    }
+    b.x = nx;
+    b.legs ^= (b.x & 1) == 0;
+    /* Eat the column under its mouth. */
+    if (head >= 0 && head < W && head % 6 != 5 && hc < cols_)
+      eaten_[b.row][hc] |= 0x10 >> (head % 6);
+    int n0, n1;
+    cells(b.x, n0, n1);
+    if (c0 != n0 && c0 != n1)
+      finish_off(b.row, c0);
+    if (c1 != n0 && c1 != n1)
+      finish_off(b.row, c1);
+    if (b.x < -5 || b.x > W) {
+      b.wait = rng.range(1, 5);  // gone; back later, elsewhere
+    }
+  }
+
+  /* A character's dots as glyph rows. */
+  static void char_bits(uint8_t ch, uint8_t out[8]) {
+    for (int y = 0; y < 8; y++)
+      out[y] = ch == 0xFF ? 0x1F : ch == ' ' ? 0 : (uint8_t) (glyph_row(font_5x8, ch, y) >> 27);
+  }
+
+  void draw(TextScreen &t) {
+    bool covered[TextScreen::MAX_ROWS][TextScreen::MAX_COLS] = {};
+    for (int r = 0; r < rows_; r++)
+      for (int c = 0; c < cols_; c++)
+        t.put(c, r, screen_[r][c]);
+    for (int i = 0; i < bugs_n_; i++) {
+      const Bug &b = bugs_[i];
+      if (b.wait > 0)
+        continue;
+      int c0, c1;
+      cells(b.x, c0, c1);
+      const LcdBug &k = LCD_BUGS[b.kind];
+      for (int s = 0; s < 2; s++) {
+        int c = s ? c1 : c0;
+        if (c < 0 || c >= cols_ || (s && c1 == c0) || covered[b.row][c])
+          continue;
+        covered[b.row][c] = true;
+        uint8_t bits[8];
+        char_bits(screen_[b.row][c], bits);
+        for (int y = 0; y < 8; y++)
+          bits[y] &= ~eaten_[b.row][c];
+        for (int y = 0; y < k.h; y++) {
+          const char *row = k.rows[b.legs][y];
+          for (int dx = 0; dx < 5; dx++) {
+            int px = b.x + (b.dir > 0 ? dx : 4 - dx);
+            if (row[dx] != '#' || px < c * 6 || px > c * 6 + 4)
+              continue;
+            bits[b.y + y] |= 0x10 >> (px - c * 6);
+          }
+        }
+        int slot = 2 * i + s;
+        t.glyph(slot, bits);
+        t.put(c, b.row, (uint8_t) slot);
+      }
+    }
+  }
+
+  int cols_ = 16, rows_ = 2;
+  uint8_t screen_[TextScreen::MAX_ROWS][TextScreen::MAX_COLS];
+  uint8_t eaten_[TextScreen::MAX_ROWS][TextScreen::MAX_COLS] = {};
+  Bug bugs_[MAX_BUGS];
+  int bugs_n_ = 0;
+  float empty_for_ = 0;
+};
+
 }  // namespace
 
 Saver *make_bugs() { return new Bugs(); }
+TextSaver *make_bugs_text() { return new BugsText(); }
 
-AD_REGISTER_SAVER("bugs", make_bugs, nullptr)
+AD_REGISTER_SAVER("bugs", make_bugs, make_bugs_text)
 
 }  // namespace adcore
 #endif
