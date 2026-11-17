@@ -25,7 +25,7 @@ Saver options (see SAVER_OPTIONS):
   dolphins: on a character LCD (each needs time_id):
            clock - true shows the time (HH:MM) in the sky, a dolphin leaping
              in front of it;
-           date - true has the date take turns with it, through white;
+           date - true has the date take turns with it, through blank;
            latitude, longitude - degrees, or sensors giving them (Home
              Assistant's zone.home has both as attributes): the real sun
              and moon cross the sky, rising at the right, the moon in its

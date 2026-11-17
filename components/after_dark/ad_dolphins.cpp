@@ -1042,7 +1042,7 @@ class DolphinsText : public TextSaver {
       moon_col_ = -1;  // the sun outshines it
   }
 
-  /* The time, then the date, taking turns through white. */
+  /* The time, then the date, taking turns through blank. */
   void update_text(bool have_time, const Clock &k, float step) {
     text_[0][0] = text_[1][0] = 0;
     if (!clock_ || !have_time)
@@ -1115,15 +1115,17 @@ class DolphinsText : public TextSaver {
     const bool in_b = at(showing_ ^ 1, c, cb);
     if (!in_a && !in_b)
       return false;
-    const uint8_t WHITE = 0xFF;
+    /* Through blank, every dot off: the backlight's colour on any panel.
+       (The full block, 0xFF, read as black on a light panel.) */
+    const uint8_t BLANK = ' ';
     int stage = (int) (fade_ / FADE_STEP);
     if (stage == 0) {
       code = ca;
-      other = WHITE;
+      other = BLANK;
     } else if (stage == 1) {
-      code = other = WHITE;
+      code = other = BLANK;
     } else {
-      code = WHITE;
+      code = BLANK;
       other = cb;
     }
     return true;
@@ -1294,7 +1296,7 @@ class DolphinsText : public TextSaver {
   }
 
   /* Seconds the time and the date each stay, and each of the three steps of
-     the fade between them (into white, white, out of it). */
+     the fade between them (half gone, blank, half there). */
   static constexpr float TIME_TIME = 9, DATE_TIME = 4, FADE_STEP = 0.25f;
 
   int cols_ = 16, rows_ = 2, w_ = 0, h_ = 0, water_ = 0;
