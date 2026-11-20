@@ -39,6 +39,9 @@ struct ShellStyle {
   std::vector<std::string> banner;
   std::string bad_command = "Bad command or file name";
   bool lowercase = false;  // typos keep to lowercase letters
+  /* The boot screen: 0 every time the shell starts, 1 only the first time
+     since power-up, 2 never (straight to the prompt). */
+  uint8_t boot = 0;
 };
 extern ShellStyle shell_style;
 

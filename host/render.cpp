@@ -297,6 +297,8 @@ int main(int argc, char **argv) {
     sscanf(getenv("AD_SKY"), "%f,%f", &sky.lat, &sky.lon);
   if (getenv("AD_WEATHER"))
     sky.weather = weather_from(getenv("AD_WEATHER"));
+  if (getenv("AD_SHELL_BOOT"))  // 0 always, 1 first, 2 never
+    shell_style.boot = atoi(getenv("AD_SHELL_BOOT"));
   if (getenv("AD_METERS_STYLE"))  // 0 bars, 1 needles, 2 both
     meter_input.style = atoi(getenv("AD_METERS_STYLE"));
   if (getenv("AD_EVERY"))

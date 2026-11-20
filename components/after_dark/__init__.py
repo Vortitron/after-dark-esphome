@@ -70,6 +70,8 @@ DOS Shell can also be given a Unix look and lines worked out in lambdas:
       prompt: "loft$ "           # $P directory, $G >, $T time, $D date
       banner: ["Linux loft 6.6.51"]
       bad_command: "%s: command not found"
+      boot: first                # the boot screen only after power-up
+                                 # (always, the default; never)
       commands:
         - name: weather
           lines:
@@ -209,6 +211,7 @@ SAVER_OPTIONS = {
             cv.Optional("prompt"): cv.string,
             cv.Optional("banner"): cv.ensure_list(cv.string),
             cv.Optional("bad_command"): cv.string,
+            cv.Optional("boot", default="always"): cv.one_of("always", "first", "never", lower=True),
         }
     ),
 }
@@ -350,6 +353,8 @@ async def _shell_to_code(var, options):
         cg.add(var.set_shell_bad_command(style["bad_command"]))
     if unix:
         cg.add(var.set_shell_lowercase(True))
+    if options["boot"] != "always":
+        cg.add(var.set_shell_boot({"first": 1, "never": 2}[options["boot"]]))
     cg.add(var.set_shell_classic(options.get("classic", not unix and not options.get("commands"))))
     for command in options.get("commands", []):
         cg.add(var.add_shell_command(command["name"]))

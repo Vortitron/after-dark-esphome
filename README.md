@@ -180,6 +180,8 @@ goes in:
   gives it a Unix look (a `name$ ` prompt, a Linux login banner, `x: command not
   found`), and `prompt:` (`$P` directory, `$G` >, `$T` time, `$D` date),
   `banner:` and `bad_command:` (`%s` is the word typed) set each part.
+  `boot: first` shows the boot screen only after power-up, so taking over
+  from another saver it starts typing at once (`never` skips it always).
 
 ### A Home Assistant terminal on a two-line LCD
 

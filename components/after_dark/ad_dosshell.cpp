@@ -344,6 +344,15 @@ class Shell {
     wait_ = 0;
     counting_ = false;
     reset_queue();
+    /* `boot: first` - taking over from another saver later, it goes
+       straight to the prompt. */
+    static bool booted = false;
+    bool skip = shell_style.boot == 2 || (shell_style.boot == 1 && booted);
+    booted = true;
+    if (skip) {
+      push(PROMPT);
+      return;
+    }
     if (!shell_style.banner.empty()) {
       /* A banner of the YAML's own instead of the BIOS and AD-DOS. */
       for (const std::string &line : shell_style.banner) {

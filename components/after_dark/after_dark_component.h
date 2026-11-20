@@ -141,6 +141,7 @@ class AfterDarkComponent : public Component {
   void add_shell_banner(const std::string &line) { ::adcore::shell_style.banner.push_back(line); }
   void set_shell_bad_command(const std::string &f) { ::adcore::shell_style.bad_command = f; }
   void set_shell_lowercase(bool on) { ::adcore::shell_style.lowercase = on; }
+  void set_shell_boot(uint8_t when) { ::adcore::shell_style.boot = when; }
   void set_initial_saver(const std::string &name) { initial_ = name; }
 
   void setup() override;
