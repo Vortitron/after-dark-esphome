@@ -32,7 +32,11 @@ Saver options (see SAVER_OPTIONS):
              phase, and the stars come out only at night;
            weather - a text sensor with Home Assistant's conditions (rainy,
              cloudy...): a glyph at the right of the sky for all but a
-             clear one, and no stars when it's clouded over.
+             clear one, and no stars when it's clouded over;
+           readings - up to four lines taking turns at the left of the sky
+             (the clock then keeps to the right), each a sensor, a sensor
+             with a format ({sensor: x, format: "%.0f°"}; default %.0f), or
+             a lambda returning the line.
   meters:  a pair of VU meters, left and right (an extra, not a module):
            left, right - a sensor, or a lambda read every frame, giving the
              level (right follows left if it has none); with neither, the
@@ -93,6 +97,7 @@ import esphome.final_validate as fv
 from esphome.components import display, sensor, text_sensor
 from esphome.const import CONF_DIMENSIONS, CONF_ID, CONF_TIME_ID
 from esphome.core import CORE, ID
+from esphome.helpers import cpp_string_escape
 
 CODEOWNERS = ["@Vortitron"]
 
@@ -141,6 +146,26 @@ LCDDisplay = cg.esphome_ns.namespace("lcd_base").class_("LCDDisplay", cg.Polling
 RealTimeClock = cg.esphome_ns.namespace("time").class_("RealTimeClock", cg.PollingComponent)
 
 
+def _dolphin_reading(value):
+    """A line at the left of the dolphins' sky: a sensor (with a printf
+    format for its value), or a lambda returning the whole line."""
+    if isinstance(value, dict) and "lambda" in value:
+        return cv.Schema({cv.Required("lambda"): cv.returning_lambda})(value)
+    if not isinstance(value, dict):
+        value = {"sensor": value}
+    value = cv.Schema(
+        {
+            cv.Required("sensor"): cv.use_id(sensor.Sensor),
+            cv.Optional("format", default="%.0f"): cv.string,
+        }
+    )(value)
+    fmt = value["format"]
+    numbers = [x for x in re.findall(r"%[-+ 0#]*\d*(?:\.\d+)?[a-zA-Z%]", fmt) if x != "%%"]
+    if len(numbers) != 1 or numbers[0][-1] not in "fFeEgG":
+        raise cv.Invalid(f"format '{fmt}' needs exactly one number (%f, %.1f, %g...); %% for a %")
+    return value
+
+
 def _shell_entity(value):
     """A line of a DOS Shell command: an entity's id, the id with a label,
     attribute or unit of its own, or a lambda returning the whole line."""
@@ -176,6 +201,7 @@ SAVER_OPTIONS = {
             cv.Optional("latitude"): cv.Any(cv.float_range(min=-90, max=90), cv.use_id(sensor.Sensor)),
             cv.Optional("longitude"): cv.Any(cv.float_range(min=-180, max=360), cv.use_id(sensor.Sensor)),
             cv.Optional("weather"): cv.use_id(text_sensor.TextSensor),
+            cv.Optional("readings"): cv.All(cv.ensure_list(_dolphin_reading), cv.Length(min=1, max=4)),
         }
     ),
     "meters": cv.Schema(
@@ -418,6 +444,17 @@ async def _dolphins_to_code(var, options):
                 cg.RawExpression(f"[](const std::string &s) {{ {var}->set_sky_weather(s); }}")
             )
         )
+    for reading in options.get("readings", []):
+        if "lambda" in reading:
+            fn = await cg.process_lambda(reading["lambda"], [], return_type=cg.std_string)
+        else:
+            source = await cg.get_variable(reading["sensor"])
+            fmt = cpp_string_escape(reading["format"])
+            fn = cg.RawExpression(
+                f"[]() -> std::string {{ float v = {source}->state; if (std::isnan(v)) return \"\"; "
+                f"char b[24]; snprintf(b, sizeof b, {fmt}, v); return b; }}"
+            )
+        cg.add(cg.RawExpression(f"::adcore::sky.readings.push_back({fn})"))
 
 
 async def _meters_to_code(var, options):

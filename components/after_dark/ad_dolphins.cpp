@@ -18,7 +18,9 @@
 #include "ad_core.h"
 #include "ad_text.h"
 #include "ad_sky.h"
+#include "ad_live.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -26,7 +28,8 @@
 namespace adcore {
 
 /* The time in the sky on a character LCD (the YAML's `clock: true`), and
-   the date taking turns with it (`date: true`). */
+   the date taking turns with it (`date: true`). The readings (sky.readings)
+   take turns at the left. */
 bool dolphins_clock = false;
 bool dolphins_date = false;
 
@@ -896,6 +899,97 @@ const WeatherArt WEATHER_ART[] = {
                             {"..#..", "..#..", "..#..", "..#..", ".....", "..#..", ".....", "....."}}},
 };
 
+/* Lines in the sky row that take turns, each fading out through blank and
+   the next in. */
+struct Turns {
+  static const int MAX = 4;
+  static constexpr float FADE_STEP = 0.25f;  // each of half gone, blank, half there
+  char text[MAX][16] = {};
+  float hold[MAX] = {};
+  int x0[MAX] = {};
+  int placed[MAX] = {-1, -1, -1, -1};  // the length it was placed at
+  int n = 0, showing = 0;
+  float shown = 0, fade = -1;
+
+  void reset() {
+    showing = 0;
+    shown = 0;
+    fade = -1;
+    for (int i = 0; i < MAX; i++) {
+      text[i][0] = 0;
+      placed[i] = -1;
+    }
+  }
+  bool empty(int i) const { return !text[i][0]; }
+  /* The next line with something in it. */
+  int next() const {
+    for (int k = 1; k <= n; k++) {
+      int i = (showing + k) % n;
+      if (!empty(i))
+        return i;
+    }
+    return showing;
+  }
+  void step(float dt) {
+    if (n < 1)
+      return;
+    if (fade >= 0) {
+      fade += dt;
+      if (fade >= 3 * FADE_STEP) {
+        fade = -1;
+        placed[showing] = -1;  // placed afresh when it next comes
+        showing = next();
+        shown = 0;
+      }
+      return;
+    }
+    if (empty(showing)) {
+      showing = next();
+      shown = 0;
+      return;
+    }
+    shown += dt;
+    if (shown >= hold[showing] && next() != showing)
+      fade = 0;
+  }
+  /* What the sky row shows in column c, if anything: both codes the same,
+     or two to blend (where the panel can). */
+  bool cell(int c, uint8_t &code, uint8_t &other) const {
+    if (n < 1)
+      return false;
+    auto at = [&](int i, uint8_t &ch) {
+      int j = c - x0[i];
+      if (j < 0 || j >= (int) strlen(text[i]))
+        return false;
+      ch = (uint8_t) text[i][j];
+      return true;
+    };
+    uint8_t ca = ' ', cb = ' ';
+    const bool in_a = at(showing, ca);
+    if (fade < 0) {
+      code = other = ca;
+      return in_a;
+    }
+    const bool in_b = at(next(), cb);
+    if (!in_a && !in_b)
+      return false;
+    /* Through blank, every dot off: the backlight's colour on any panel.
+       (The full block, 0xFF, read as black on a light panel.) */
+    const uint8_t BLANK = ' ';
+    int stage = (int) (fade / FADE_STEP);
+    if (stage == 0) {
+      code = ca;
+      other = BLANK;
+    } else if (stage == 1) {
+      code = other = BLANK;
+    } else {
+      code = BLANK;
+      other = cb;
+    }
+    return true;
+  }
+};
+
 class DolphinsText : public TextSaver {
  public:
   void start(TextScreen &t) override {
@@ -908,7 +1002,14 @@ class DolphinsText : public TextSaver {
     water_ = (rows_ - 1) * 9 + 4;
     clock_ = dolphins_clock && cols_ >= 12;
     date_ = clock_ && dolphins_date;
-    int sky0 = clock_ ? (date_ ? 11 : 6) : 0;
+    /* The readings at the left, so the clock keeps to the right. */
+    reads_.n = cols_ >= 12 ? (int) std::min<size_t>(sky.readings.size(), Turns::MAX) : 0;
+    for (int i = 0; i < reads_.n; i++)
+      reads_.hold[i] = READING_TIME;
+    times_.n = clock_ ? (date_ ? 2 : 1) : 0;
+    times_.hold[0] = TIME_TIME;
+    times_.hold[1] = DATE_TIME;
+    int sky0 = clock_ && !reads_.n ? (date_ ? 11 : 6) : reads_.n ? 4 : 0;
     int room = cols_ - sky0 - 4;
     moon_col_ = sky0 + 2 + rng.below(room > 1 ? room : 1);
     moon_y_ = 1;
@@ -920,14 +1021,11 @@ class DolphinsText : public TextSaver {
     leap_ = -1;
     wait_ = 0.5f;
     splash_t_ = 0;
-    showing_ = 0;
-    shown_t_ = 0;
-    fade_ = -1;
+    times_.reset();
+    reads_.reset();
     sky_at_ = -1;
     real_ = false;
     sun_col_ = -1;
-    text_[0][0] = text_[1][0] = 0;
-    x0_[0] = x0_[1] = 0;
     t.clear();
   }
 
@@ -1042,46 +1140,54 @@ class DolphinsText : public TextSaver {
       moon_col_ = -1;  // the sun outshines it
   }
 
-  /* The time, then the date, taking turns through blank. */
+  /* The time, then the date, taking turns through blank; the readings the
+     same way at the left. */
   void update_text(bool have_time, const Clock &k, float step) {
-    text_[0][0] = text_[1][0] = 0;
+    for (int i = 0; i < reads_.n; i++) {
+      std::string line;
+      set_live(line, sky.readings[i]());
+      int n = 0;
+      for (unsigned char ch : line) {
+        if (n >= cols_ / 2 || n >= 15)
+          break;
+        /* The HD44780's own degree sign; '?' for what its ROM lacks. */
+        reads_.text[i][n++] = ch == 0xB0 ? (char) 0xDF : ch < 0x80 ? (char) ch : '?';
+      }
+      reads_.text[i][n] = 0;
+      reads_.x0[i] = 0;
+    }
+    reads_.step(step);
+
+    times_.text[0][0] = times_.text[1][0] = 0;
     if (!clock_ || !have_time)
       return;
-    snprintf(text_[0], sizeof text_[0], "%02d:%02d", k.hour, k.minute);
+    snprintf(times_.text[0], sizeof times_.text[0], "%02d:%02d", k.hour, k.minute);
     static const char *const DAY[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
     static const char *const MON[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
     const char *mon = MON[(k.month + 11) % 12];
     if (cols_ >= 14)
-      snprintf(text_[1], sizeof text_[1], "%s %d %s", DAY[k.weekday % 7], k.day, mon);
+      snprintf(times_.text[1], sizeof times_.text[1], "%s %d %s", DAY[k.weekday % 7], k.day, mon);
     else
-      snprintf(text_[1], sizeof text_[1], "%d %s", k.day, mon);
-    if (!date_) {
-      x0_[0] = place_text(0);
-      return;
-    }
-    if (fade_ >= 0) {
-      fade_ += step;
-      if (fade_ >= 3 * FADE_STEP) {
-        fade_ = -1;
-        showing_ ^= 1;
-        shown_t_ = 0;
+      snprintf(times_.text[1], sizeof times_.text[1], "%d %s", k.day, mon);
+    /* Each placed as it comes in (so the sun moving doesn't shift it), and
+       again if its length changes. */
+    for (int i : {times_.showing, times_.next()}) {
+      int len = (int) strlen(times_.text[i]);
+      if (times_.placed[i] != len) {
+        times_.x0[i] = place_text(len);
+        times_.placed[i] = len;
       }
-      return;
     }
-    if (shown_t_ == 0)
-      x0_[showing_] = place_text(showing_);
-    shown_t_ += step;
-    if (shown_t_ >= (showing_ ? DATE_TIME : TIME_TIME)) {
-      fade_ = 0;
-      x0_[showing_ ^ 1] = place_text(showing_ ^ 1);
-    }
+    times_.step(step);
   }
 
-  /* At the left, unless the right keeps the sun and moon in sight. */
-  int place_text(int i) const {
-    int len = (int) strlen(text_[i]);
+  /* At the left, unless the right keeps the sun and moon in sight; always
+     at the right with readings at the left. */
+  int place_text(int len) const {
     int right = sky_cols() - len;
+    if (reads_.n)
+      return right < 0 ? 0 : right;
     auto hides = [&](int x0) {
       for (int b : {sun_col_, moon_col_})
         if (b >= x0 && b < x0 + len)
@@ -1093,42 +1199,10 @@ class DolphinsText : public TextSaver {
     return right;
   }
 
-  /* What the sky row shows in column c for the time or date, if anything:
-     both codes the same, or two to blend (where the panel can). */
+  /* What the sky row shows in column c for the time, the date or a
+     reading, if anything. The clock wins where they meet. */
   bool text_cell(int c, uint8_t &code, uint8_t &other) const {
-    const char *a = text_[showing_];
-    if (!a[0])
-      return false;
-    auto at = [&](int i, int col, uint8_t &ch) {
-      int j = col - x0_[i];
-      if (j < 0 || j >= (int) strlen(text_[i]))
-        return false;
-      ch = (uint8_t) text_[i][j];
-      return true;
-    };
-    uint8_t ca = ' ', cb = ' ';
-    const bool in_a = at(showing_, c, ca);
-    if (fade_ < 0) {
-      code = other = ca;
-      return in_a;
-    }
-    const bool in_b = at(showing_ ^ 1, c, cb);
-    if (!in_a && !in_b)
-      return false;
-    /* Through blank, every dot off: the backlight's colour on any panel.
-       (The full block, 0xFF, read as black on a light panel.) */
-    const uint8_t BLANK = ' ';
-    int stage = (int) (fade_ / FADE_STEP);
-    if (stage == 0) {
-      code = ca;
-      other = BLANK;
-    } else if (stage == 1) {
-      code = other = BLANK;
-    } else {
-      code = BLANK;
-      other = cb;
-    }
-    return true;
+    return times_.cell(c, code, other) || reads_.cell(c, code, other);
   }
 
   void splash(float x) {
@@ -1295,16 +1369,12 @@ class DolphinsText : public TextSaver {
     return ' ';
   }
 
-  /* Seconds the time and the date each stay, and each of the three steps of
-     the fade between them (half gone, blank, half there). */
-  static constexpr float TIME_TIME = 9, DATE_TIME = 4, FADE_STEP = 0.25f;
+  /* Seconds the time, the date and each reading stay. */
+  static constexpr float TIME_TIME = 9, DATE_TIME = 4, READING_TIME = 5;
 
   int cols_ = 16, rows_ = 2, w_ = 0, h_ = 0, water_ = 0;
   bool clock_ = false, date_ = false;
-  char text_[2][16] = {};
-  int x0_[2] = {0, 0};
-  int showing_ = 0;
-  float shown_t_ = 0, fade_ = -1;
+  Turns times_, reads_;
   bool real_ = false, night_ = true, waxing_ = true;
   long long sky_at_ = -1;
   float lit_ = 1;

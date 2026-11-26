@@ -5,7 +5,9 @@
  * sliver of a 16-column sky), the moon's phase, and the weather now.
  */
 #include <cstdint>
+#include <functional>
 #include <string>
+#include <vector>
 
 namespace adcore {
 
@@ -31,6 +33,9 @@ enum Weather : uint8_t {
 struct Sky {
   float lat = 1000, lon = 1000;  // unset
   Weather weather = WX_UNKNOWN;
+  /* Lines that take turns at the left of the sky (dolphins: readings:), as
+     UTF-8; an empty one is skipped. */
+  std::vector<std::function<std::string()>> readings;
   bool located() const { return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 360; }
 };
 extern Sky sky;

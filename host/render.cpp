@@ -297,6 +297,18 @@ int main(int argc, char **argv) {
     sscanf(getenv("AD_SKY"), "%f,%f", &sky.lat, &sky.lon);
   if (getenv("AD_WEATHER"))
     sky.weather = weather_from(getenv("AD_WEATHER"));
+  /* AD_READINGS="16°,35%": lines taking turns at the left of the sky. */
+  if (getenv("AD_READINGS")) {
+    std::string all = getenv("AD_READINGS");
+    for (size_t at = 0; at <= all.size();) {
+      size_t comma = all.find(',', at);
+      if (comma == std::string::npos)
+        comma = all.size();
+      std::string one = all.substr(at, comma - at);
+      sky.readings.push_back([one]() { return one; });
+      at = comma + 1;
+    }
+  }
   if (getenv("AD_SHELL_BOOT"))  // 0 always, 1 first, 2 never
     shell_style.boot = atoi(getenv("AD_SHELL_BOOT"));
   if (getenv("AD_METERS_STYLE"))  // 0 bars, 1 needles, 2 both
