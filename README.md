@@ -12,7 +12,7 @@ component to a config yourself:
 
 ```yaml
 external_components:
-  - source: github://Vortitron/after-dark-esphome@v1.3.1
+  - source: github://Vortitron/after-dark-esphome@v1.4.0
     components: [after_dark]
 ```
 
@@ -28,7 +28,7 @@ a change.
 | Saver | From | Character LCD |
 |---|---|---|
 | `boris` | Boris (BORIS.AD) | ✓ one cat, hand-drawn poses |
-| `bugs` | Bugs | |
+| `bugs` | Bugs | ✓ they eat whatever text is on the screen |
 | `clocks` | Clocks 3.0 (CLOCKS3.AD); pick a `face` | ✓ big 3×2 digits, drifting |
 | `dosshell` | DOS Shell; can type your Home Assistant data as commands | ✓ the panel is the screen |
 | `einstein` | Einstein | ✓ lines only |
@@ -37,10 +37,10 @@ a change.
 | `geobounce` | GeoBounce | |
 | `gravity` | Gravity | |
 | `hard_rain` | Hard Rain (RAIN.AD) | ✓ (marginal) |
-| `mandelbrot` | Mandelbrot | |
+| `mandelbrot` | Mandelbrot | ✓ in blocks, three shades with dim cells |
 | `marbles` | Marbles, the 1992 original (MARBLES2.AD) | |
 | `messages` | Messages (MESSAGE3.AD) | ✓ |
-| `mountains` | Mountains | |
+| `mountains` | Mountains | ✓ text-art peaks, the far range dim |
 | `mowin` | Mowin' Man | ✓ |
 | `nocturne` | Nocturnes | ✓ |
 | `nonsense` | Nonsense | ✓ |
@@ -59,12 +59,13 @@ a change.
 | `warp` | Warp! | ✓ (outward) |
 | `zot` | Zot! | ✓ |
 
-One extra, from outside After Dark, in the spirit of the cyan organic-EL car
-stereos of the early 2000s and their famous dolphins:
+Two extras, from outside After Dark. The dolphins are in the spirit of the
+cyan organic-EL car stereos of the early 2000s; the meters are a hi-fi's:
 
 | Saver | What | Character LCD |
 |---|---|---|
-| `dolphins` | An original saver, drawn in code: a pod leaping at sea (by moonlight, or in silhouette at dawn) and swimming the deep among kelp and light shafts, dithered to a dot matrix like the stereo's panel | ✓ hand-drawn |
+| `dolphins` | An original saver, drawn in code: a pod leaping at sea (by moonlight, or in silhouette at dawn) and swimming the deep among kelp and light shafts, dithered to a dot matrix like the stereo's panel | ✓ hand-drawn, with the time, date, real sun and moon, weather and readings in the sky |
+| `meters` | A pair of analogue VU meters, needles swinging on a spring, dancing to made-up music or showing two of your sensors | ✓ a bar a row with the peak held, or needles |
 
 The stereos' own clips, dolphins and all, are a sister project:
 [OEL for ESPHome](https://github.com/Vortitron/oel-esphome)
@@ -182,6 +183,36 @@ goes in:
   `banner:` and `bad_command:` (`%s` is the word typed) set each part.
   `boot: first` shows the boot screen only after power-up, so taking over
   from another saver it starts typing at once (`never` skips it always).
+- `dolphins:` on a character LCD, a sky to look at (each needs `time_id`):
+  `clock: true` puts the time in the top row, a dolphin leaping in front of
+  it, and `date: true` has the date take turns with it, fading through
+  blank. `latitude:` and `longitude:` (degrees, or sensors: Home Assistant's
+  `zone.home` has both as attributes) bring the real sun and moon, rising at
+  the right and setting at the left, the moon in its phase, and stars only
+  at night. `weather:` takes a text sensor with Home Assistant's conditions
+  and puts a glyph at the right for all but a clear sky. `readings:` (up to
+  four) take turns at the left, and the clock then keeps to the right:
+
+  ```yaml
+  - dolphins:
+      clock: true
+      date: true
+      latitude: home_latitude      # homeassistant sensors on zone.home
+      longitude: home_longitude
+      weather: weather_condition   # a text sensor: sunny, rainy...
+      readings:
+        - sensor: room_temperature
+          format: "%.0f°"          # printf, one number; the LCD's own °
+        - sensor: room_humidity
+          format: "%.0f%%"
+        - lambda: 'return id(bins_due).state ? "Bins" : "";'  # empty: skipped
+  ```
+- `meters:` `left:` and `right:` each take a sensor, or a lambda read every
+  frame (right follows left if it has none), on a scale from `min:` to
+  `max:` (default 0 to 100); with neither, they dance to made-up music. On a
+  character LCD, `style:` is `bars` (a row each, to the dot, the peak held,
+  a dim trail falling behind), `needles` (two meters in the top row) or
+  `both`, taking turns every half minute.
 
 ### A Home Assistant terminal on a two-line LCD
 
@@ -307,8 +338,14 @@ switch:
     name: Screensaver shading
 ```
 
-Character LCDs don't take it: nearly all their savers are hand-drawn 1-bit
-glyphs, with no greys to give.
+On a character LCD it gives dim cells instead: a cell shown on every other
+pass reads at about half brightness. The savers use them for depth: the
+dolphins' sea and faint stars, Warp's far stars, Starry Night's stars fading
+in and out, Hard Rain's widening ripples, every other fish, Mountains' far
+range, Mandelbrot's shades and the meters' falling trail. With it off they
+look as before. Only the cells that differ between passes are sent, so a
+1602 at 400 kHz manages about 50 passes a second; a still dim cell can
+flicker a little, so nothing that stays put is drawn dim.
 
 ### Flash
 
@@ -321,7 +358,7 @@ On a 4 MB board with OTA:
 | Build (ESPHome 2025.7, ESP-IDF, Wi-Fi + API + OTA + SNTP) | Savers | Flash used of the 1.8 MB OTA slot |
 |---|---|---|
 | ESP32-C3 + SH1106 OLED ([example](examples/after-dark-c3-oled.yaml)) | `all` (31 then) | 1.39 MB (76%) |
-| ESP32-C3 + 1602 LCD ([example](examples/after-dark-c3-lcd.yaml)) | the 17 with LCD versions | 1.03 MB (56%) |
+| ESP32-C3 + 1602 LCD ([example](examples/after-dark-c3-lcd.yaml)) | the 17 with LCD versions then | 1.03 MB (56%) |
 | ESP32-S3 + ILI9341 ([example](examples/after-dark-s3.yaml)) | `all` (31 then) | 1.75 MB (95%) |
 | ESP32-S3 + ILI9341 | `toasters`, `warp` (no SNTP) | 0.99 MB (54%) |
 
@@ -369,6 +406,9 @@ host/preview.sh OUTDIR zot ad_zot.cpp   # one saver, every screen, contact sheet
 AD_FRM=2 host/render spheres 128x64m 200 OUTDIR   # frame-rate modulation, each frame a pass
 AD_SHELL_DEMO=1 host/render dosshell lcd16x2 480 OUTDIR 8   # DOS Shell with made-up live data
 AD_LCD_TEXT=1 AD_SHELL_DEMO=unix host/render dosshell lcd16x2 1200 - 20   # the panel as text, each change
+AD_FRM=2 AD_DOLPHINS_CLOCK=1 AD_DOLPHINS_DATE=1 AD_SKY=51.5,-0.1 AD_WEATHER=rainy \
+  AD_READINGS="16°,35%" host/render dolphins lcd16x2 400 OUTDIR 10   # the LCD sky, dim cells half-lit
+AD_METERS_STYLE=1 host/render meters lcd16x2 200 OUTDIR 10      # 0 bars, 1 needles, 2 both
 ```
 
 `docs/dosshell-unix.gif` is `AD_TIME=1793000000 AD_SHELL_DEMO=unix

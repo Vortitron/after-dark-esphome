@@ -299,7 +299,7 @@
         <p>Put the After Dark screen savers on an ESP32 with a little screen, and pick one from Home Assistant. Switch on the modules you want, check they fit the flash, and copy the program into ESPHome. Only the modules you switch on go into the firmware.</p>
       </div>
       <div>
-        <div class="spec">MODEL <b>AD-ESP</b> · REV <b id="rev">v1.3.1</b><br>MODULES <b id="count">—</b> · BUS <b>I²C / SPI</b></div>
+        <div class="spec">MODEL <b>AD-ESP</b> · REV <b id="rev">v1.4.0</b><br>MODULES <b id="count">—</b> · BUS <b>I²C / SPI</b></div>
         <div class="lamps"><span class="lamp run"><i></i>RUN</span><span class="lamp fault" id="fault"><i></i>FLASH FULL</span></div>
       </div>
     </section>
@@ -351,7 +351,7 @@
         <button class="btn small" id="all" type="button">All on</button>
         <button class="btn small" id="none" type="button">All off</button>
       </header>
-      <p class="hint">Each AD module is ported from its page on the <a href="https://vortitron.github.io/after-dark/">After Dark site</a>. On a 1-bit OLED its art is shrunk and redrawn in black and white; on a character LCD it is drawn with the panel's eight custom characters. The EX module is an extra from outside After Dark: Dolphins, drawn for this in the style of the cyan OEL car stereos. Point at a module's screen to see it run on the display you chose. Hatched modules have no version for this display.</p>
+      <p class="hint">Each AD module is ported from its page on the <a href="https://vortitron.github.io/after-dark/">After Dark site</a>. On a 1-bit OLED its art is shrunk and redrawn in black and white; on a character LCD it is drawn with the panel's eight custom characters. The EX modules are extras from outside After Dark: Dolphins, drawn for this in the style of the cyan OEL car stereos, and Meters, a hi-fi's pair of VU meters that can show two of your sensors. Point at a module's screen to see it run on the display you chose. Hatched modules have no version for this display.</p>
       <p class="hint">For the stereos' own clips (the dolphins, the colour movies, the level meters) see the sister project, <a href="https://vortitron.github.io/oel-esphome/">OEL for ESPHome</a>.</p>
       <div class="rail" id="list" aria-label="Screen savers"></div>
       <div class="bar">
@@ -432,7 +432,7 @@
     'use strict';
 
     /* The component's release that configs pin, and where the web versions are. */
-    var VERSION = 'v1.3.1';
+    var VERSION = 'v1.4.0';
     var SITE = 'https://vortitron.github.io/after-dark/';
 
     /* The screens: which kind of saver they get, and their ESPHome block. */
@@ -471,6 +471,7 @@
     function kb(n) { return n >= 1048576 ? (n / 1048576).toFixed(2) + ' MB' : Math.round(n / 1024) + ' KB'; }
     function kind() { return SCREENS[$('screen').value].kind; }
     var FRM_NOTE = ' Frame-rate modulation gives the savers that draw greys (Mandelbrot, Mountains, Shapes, Spheres, Mowin’, Hard Rain, GeoBounce, Starry Night) smoother shading: the screen is rewritten as fast as it goes, a grey dot lit in only some of the passes. Over I²C it shimmers, which some find fine and some don’t; a switch in Home Assistant turns it on and off.';
+    var TEXT_FRM_NOTE = ' Frame-rate modulation gives a character LCD dim cells, for depth: the dolphins’ sea and faint stars, Warp’s far stars, Starry Night’s fading stars, Hard Rain’s widening ripples, the far fish, Mountains’ far range, Mandelbrot’s shades and the meters’ falling trail. A dim cell is shown on every other pass, about 50 a second over I²C at 400 kHz; a switch in Home Assistant turns it on and off.';
 
     function base() {
       var b = data.base[$('board').value], k = kind();
@@ -642,8 +643,8 @@
     }
 
     function update() {
-      $('screen-note').textContent = SCREENS[$('screen').value].note + (kind() === 'mono' ? FRM_NOTE : '');
-      $('frm-field').hidden = kind() !== 'mono';
+      $('screen-note').textContent = SCREENS[$('screen').value].note + (kind() === 'mono' ? FRM_NOTE : kind() === 'text' ? TEXT_FRM_NOTE : '');
+      $('frm-field').hidden = kind() === 'colour';
       Array.prototype.forEach.call($('list').querySelectorAll('.mod'), function (mod) {
         var name = mod.dataset.name, s = data.savers[name], ok = available(name);
         var input = mod.querySelector('input');
@@ -700,7 +701,7 @@
       if (scr.bus === 'spi') {
         y += scr.block(p);
       } else {
-        y += 'i2c:\n  sda: ' + p.sda + '\n  scl: ' + p.scl + '\n  frequency: ' + (k === 'text' ? '100kHz' : '400kHz') + '\n\n';
+        y += 'i2c:\n  sda: ' + p.sda + '\n  scl: ' + p.scl + '\n  frequency: ' + (k === 'text' && !$('frm').checked ? '100kHz' : '400kHz') + '\n\n';
         if (k === 'text') {
           y += 'display:\n  - platform: lcd_pcf8574\n    id: lcd\n    dimensions: ' + scr.dims +
             '\n    address: 0x27   # some backpacks are 0x3F\n    update_interval: never     # after_dark pushes the frames\n';
@@ -726,17 +727,36 @@
               '    #         entities: [sensor.outdoor_temperature, weather.home]\n' +
               '    #       - name: doors\n' +
               '    #         entities: [binary_sensor.front_door, binary_sensor.back_door]\n';
+          } else if (n === 'dolphins' && k === 'text') {
+            y += '    - dolphins          # or with the time, the real sky and readings:\n' +
+              '    # - dolphins:\n' +
+              '    #     clock: true     # HH:MM in the sky\n' +
+              '    #     date: true      # taking turns with the date\n' +
+              '    #     latitude: 51.5  # the real sun and moon (or a sensor)\n' +
+              '    #     longitude: -0.1\n' +
+              '    #     readings:       # taking turns at the left\n' +
+              '    #       - sensor: room_temperature\n' +
+              '    #         format: "%.0f°"\n';
+          } else if (n === 'meters') {
+            y += '    - meters            # made-up music, or two of your sensors:\n' +
+              '    # - meters:\n' +
+              '    #     left: house_power\n' +
+              '    #     right: solar_power\n' +
+              '    #     min: 0\n' +
+              '    #     max: 8\n' +
+              (k === 'text' ? '    #     style: bars     # or needles, or both\n' : '');
           } else {
             y += '    - ' + n + '\n';
           }
         });
         y += '  saver: ' + ($('start').value || names[0]) + '\n';
         if (k === 'mono' && $('frm').checked) y += '  frame_rate_modulation: true   # smoother greys (the switch below)\n';
+        if (k === 'text' && $('frm').checked) y += '  frame_rate_modulation: true   # dim cells (the switch below)\n';
       } else {
         y += '  # switch on at least one saver module above\n';
       }
       y += '\nselect:\n  - platform: after_dark\n    name: Screensaver\n';
-      if (k === 'mono') y += '\nswitch:                          # frame-rate modulation, on and off\n  - platform: after_dark\n    name: Screensaver shading\n';
+      if (k === 'mono' || (k === 'text' && $('frm').checked)) y += '\nswitch:                          # frame-rate modulation, on and off\n  - platform: after_dark\n    name: Screensaver shading\n';
       return y;
     }
 
@@ -754,6 +774,7 @@
     ['board', 'flash', 'screen'].forEach(function (id) {
       $(id).addEventListener('change', function () {
         if (id === 'screen') {
+          $('frm').checked = kind() === 'text';  // an LCD's dim cells are what its previews show
           option = {};  // defaults differ between colour and 1-bit
           Array.prototype.forEach.call(document.querySelectorAll('.param'), function (r) { delete r.dataset.kind; });
         }
@@ -761,7 +782,7 @@
       });
     });
     $('start').addEventListener('change', function () { $('yaml').value = yaml(picked()); });
-    $('frm').addEventListener('change', function () { $('yaml').value = yaml(picked()); });
+    $('frm').addEventListener('change', function () { update(); });
 
 
     /* ------------------------------------------------------- preview -- */
@@ -769,7 +790,7 @@
     var previewing = null, lastFocus = null;
     var NOTES = {
       mono: 'As the ESP32 draws it on a 128 × 64 OLED: the art shrunk and baked to black and white.',
-      text: 'As the ESP32 draws it on a 16 × 2 character LCD, with the panel’s eight custom characters.',
+      text: 'As the ESP32 draws it on a 16 × 2 character LCD, with the panel’s eight custom characters; dim cells (Shading) half-lit.',
       colour: 'On a colour panel the ESP32 draws the original art, as the web version does.',
       extra: 'As the ESP32 draws it on a 320 × 240 colour panel.'
     };

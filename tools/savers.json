@@ -242,5 +242,10 @@
   "module": "ZOT.AD",
   "page": "zot.html",
   "about": "Forked lightning."
+ },
+ "meters": {
+  "title": "Meters",
+  "extra": true,
+  "about": "A pair of VU meters, needles on a screen and bars on an LCD, dancing to made-up music or showing two of your sensors."
  }
 }

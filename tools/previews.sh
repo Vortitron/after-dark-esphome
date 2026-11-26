@@ -6,7 +6,8 @@
 #
 # oled/<saver>.gif   128x64 1-bit, 15 s at 20 fps, at its own size (the page
 #                    scales it up with crisp pixels)
-# lcd/<saver>.gif    a blue 1602, 12 s at 8 fps, for the savers that have one
+# lcd/<saver>.gif    a blue 1602, 12 s at 8 fps, for the savers that have one,
+#                    with dim cells (frame_rate_modulation) shown half-lit
 # colour/<saver>.gif 320x240, 20 s at 20 fps, for the extras, which have no
 #                    After Dark page for the builder to show instead
 # thumb/<saver>.gif  the colour version small (128x96, 6 s at 10 fps), for the
@@ -34,7 +35,7 @@ for saver in $("$render" 2>&1 | sed -n 's/^savers://p'); do
     "$out/oled/$saver.gif"
   convert "$tmp/0100.ppm" -define png:exclude-chunks=date,time "$out/oled/$saver.png"
   rm -f "$tmp"/*.ppm
-  if "$render" "$saver" lcd16x2 96 "$tmp" 8 6 > /dev/null 2>&1; then
+  if AD_FRM=2 "$render" "$saver" lcd16x2 96 "$tmp" 8 6 > /dev/null 2>&1; then
     ffmpeg -loglevel error -y -framerate 8 -i "$tmp/%04d.ppm" \
       -vf "split[a][b];[a]palettegen=max_colors=8:reserve_transparent=0[p];[b][p]paletteuse=dither=none" \
       "$out/lcd/$saver.gif"

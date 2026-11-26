@@ -6,22 +6,22 @@
  },
  "base": {
   "esp32c3": {
-   "colour": 896532,
-   "mono": 846590,
-   "text": 841016
+   "colour": 896068,
+   "mono": 846016,
+   "text": 840444
   },
   "esp32s3": {
-   "colour": 851612,
-   "mono": 805734
+   "colour": 851148,
+   "mono": 805160
   }
  },
  "savers": {
   "boris": {
    "about": "The kitten, chasing butterflies.",
    "bytes": {
-    "colour": 78760,
-    "mono": 50122,
-    "text": 10211
+    "colour": 78796,
+    "mono": 50184,
+    "text": 10273
    },
    "module": "BORIS.AD",
    "page": "boris.html",
@@ -31,20 +31,21 @@
   "bugs": {
    "about": "A swarm of bugs crawling about.",
    "bytes": {
-    "colour": 140575,
-    "mono": 82166
+    "colour": 144927,
+    "mono": 86736,
+    "text": 4809
    },
    "module": "BUGS.AD",
    "page": "bugs.html",
-   "text": false,
+   "text": true,
    "title": "Bugs"
   },
   "clocks": {
    "about": "The time, drifting about. Pick a face; only its art goes in.",
    "bytes": {
-    "colour": 197031,
-    "mono": 79390,
-    "text": 1893
+    "colour": 197075,
+    "mono": 79456,
+    "text": 1957
    },
    "module": "CLOCKS3.AD",
    "option": {
@@ -66,24 +67,24 @@
    "options": {
     "face": {
      "art_deco": {
-      "colour": 26711,
-      "mono": 79384
+      "colour": 26755,
+      "mono": 79450
      },
      "classic": {
-      "colour": 39353,
-      "mono": 79384
+      "colour": 39397,
+      "mono": 79450
      },
      "melting_digital": {
-      "colour": 110370,
-      "mono": 79380
+      "colour": 110414,
+      "mono": 79446
      },
      "modern": {
-      "colour": 32667,
-      "mono": 79384
+      "colour": 32711,
+      "mono": 79450
      },
      "mutating": {
-      "colour": 197023,
-      "mono": 79382
+      "colour": 197067,
+      "mono": 79448
      }
     }
    },
@@ -94,9 +95,9 @@
   "dolphins": {
    "about": "A pod leaping at sea and swimming the deep, in the style of a cyan OEL car stereo.",
    "bytes": {
-    "colour": 13401,
-    "mono": 17895,
-    "text": 3691
+    "colour": 17509,
+    "mono": 22391,
+    "text": 8187
    },
    "extra": true,
    "text": true,
@@ -105,9 +106,9 @@
   "dosshell": {
    "about": "A PC typing to itself at the C:\\> prompt, or typing your Home Assistant data as commands.",
    "bytes": {
-    "colour": 16675,
-    "mono": 17741,
-    "text": 12535
+    "colour": 16755,
+    "mono": 17855,
+    "text": 12647
    },
    "module": "DOSSHELL.AD",
    "page": "dosshell.html",
@@ -117,9 +118,9 @@
   "einstein": {
    "about": "Lines and equations chalked on a blackboard.",
    "bytes": {
-    "colour": 18189,
-    "mono": 19479,
-    "text": 4973
+    "colour": 18221,
+    "mono": 19541,
+    "text": 5035
    },
    "module": "EINSTEIN.AD",
    "page": "einstein.html",
@@ -129,9 +130,9 @@
   "fishpro": {
    "about": "An aquarium. Pick the species; each one's art goes in only if chosen.",
    "bytes": {
-    "colour": 277069,
-    "mono": 82263,
-    "text": 2141
+    "colour": 277177,
+    "mono": 82395,
+    "text": 2273
    },
    "module": "FISHPRO.AD",
    "option": {
@@ -212,8 +213,8 @@
       }
      },
      "none": {
-      "colour": 87749,
-      "mono": 82263
+      "colour": 87857,
+      "mono": 82395
      }
     }
    },
@@ -224,9 +225,9 @@
   "flocks": {
    "about": "Flocks of birds wheeling across the screen.",
    "bytes": {
-    "colour": 13868,
-    "mono": 12770,
-    "text": 3041
+    "colour": 13904,
+    "mono": 12828,
+    "text": 3099
    },
    "module": "FLOCKS.AD",
    "page": "flocks.html",
@@ -258,9 +259,9 @@
   "hard_rain": {
    "about": "Raindrops rippling on the desktop.",
    "bytes": {
-    "colour": 14927,
-    "mono": 15815,
-    "text": 15747
+    "colour": 15363,
+    "mono": 16315,
+    "text": 16247
    },
    "module": "RAIN.AD",
    "page": "hardrain.html",
@@ -270,12 +271,13 @@
   "mandelbrot": {
    "about": "Zooming for ever into the set.",
    "bytes": {
-    "colour": 2997,
-    "mono": 3815
+    "colour": 4313,
+    "mono": 5399,
+    "text": 2133
    },
    "module": "MANDELBR.AD",
    "page": "mandelbrot.html",
-   "text": false,
+   "text": true,
    "title": "Mandelbrot"
   },
   "marbles": {
@@ -292,32 +294,44 @@
   "messages": {
    "about": "A line of text floating about: OUT TO LUNCH.",
    "bytes": {
-    "colour": 25279,
-    "mono": 25901,
-    "text": 2307
+    "colour": 25315,
+    "mono": 25959,
+    "text": 2365
    },
    "module": "MESSAGE3.AD",
    "page": "messages-ad.html",
    "text": true,
    "title": "Messages"
   },
+  "meters": {
+   "about": "A pair of VU meters, needles on a screen and bars on an LCD, dancing to made-up music or showing two of your sensors.",
+   "bytes": {
+    "colour": 12659,
+    "mono": 14275,
+    "text": 4707
+   },
+   "extra": true,
+   "text": true,
+   "title": "Meters"
+  },
   "mountains": {
    "about": "Fractal landscapes of the nine planets.",
    "bytes": {
-    "colour": 6076,
-    "mono": 7505
+    "colour": 7380,
+    "mono": 9171,
+    "text": 1953
    },
    "module": "MOUNTAIN.AD",
    "page": "mountains.html",
-   "text": false,
+   "text": true,
    "title": "Mountains"
   },
   "mowin": {
    "about": "The lawn grows over the screen, then he mows it.",
    "bytes": {
-    "colour": 34675,
-    "mono": 20935,
-    "text": 2605
+    "colour": 34719,
+    "mono": 20997,
+    "text": 2667
    },
    "module": "MOWIN.AD",
    "page": "mowin.html",
@@ -327,9 +341,9 @@
   "nocturne": {
    "about": "Eyes in the dark, blinking.",
    "bytes": {
-    "colour": 4753,
-    "mono": 5507,
-    "text": 2519
+    "colour": 4789,
+    "mono": 5567,
+    "text": 2581
    },
    "module": "NOCTURNE.AD",
    "page": "nocturne.html",
@@ -339,9 +353,9 @@
   "nonsense": {
    "about": "Sentences, grammatical and meaningless.",
    "bytes": {
-    "colour": 31491,
-    "mono": 32031,
-    "text": 12316
+    "colour": 31523,
+    "mono": 32089,
+    "text": 12374
    },
    "module": "NONSENSE.AD",
    "page": "nonsense.html",
@@ -351,9 +365,9 @@
   "photon": {
    "about": "Bursts of particles.",
    "bytes": {
-    "colour": 3355,
-    "mono": 4497,
-    "text": 4435
+    "colour": 3719,
+    "mono": 4939,
+    "text": 4875
    },
    "module": "PHOTON.AD",
    "page": "photon.html",
@@ -429,9 +443,9 @@
   "starry_night": {
    "about": "A city at night, windows lighting up.",
    "bytes": {
-    "colour": 5596,
-    "mono": 6885,
-    "text": 2065
+    "colour": 5928,
+    "mono": 7149,
+    "text": 2323
    },
    "module": "STARRYNI.AD",
    "page": "starry-night.html",
@@ -463,9 +477,9 @@
   "toasters": {
    "about": "The squadron, on TOAST3's own art.",
    "bytes": {
-    "colour": 106824,
-    "mono": 56752,
-    "text": 2477
+    "colour": 106860,
+    "mono": 56814,
+    "text": 2539
    },
    "module": "TOAST3.AD",
    "page": "toasters.html",
@@ -475,9 +489,9 @@
   "toilets": {
    "about": "Toilets, rolls and plungers on the wing.",
    "bytes": {
-    "colour": 33180,
-    "mono": 20794,
-    "text": 2293
+    "colour": 33216,
+    "mono": 20856,
+    "text": 2357
    },
    "module": "TOILETS.AD",
    "page": "toilets.html",
@@ -487,9 +501,9 @@
   "warp": {
    "about": "Flying through the stars.",
    "bytes": {
-    "colour": 2540,
-    "mono": 3802,
-    "text": 3736
+    "colour": 3004,
+    "mono": 4376,
+    "text": 4308
    },
    "module": "WARP.AD",
    "page": "warp-ad.html",
@@ -499,9 +513,9 @@
   "zot": {
    "about": "Forked lightning.",
    "bytes": {
-    "colour": 3007,
-    "mono": 4371,
-    "text": 4301
+    "colour": 3375,
+    "mono": 4827,
+    "text": 4761
    },
    "module": "ZOT.AD",
    "page": "zot.html",
